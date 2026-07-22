@@ -1305,9 +1305,21 @@ HandlebarsRendering = (function () {
           qText = rawText;
           count = null;
         }
-        var formatted = sqlPrettyPrint(qText);
+        var paramMatch = qText.match(/^(.*?)\s+(\[[^\]]+\])$/);
+        var cleanSql, paramSuffix;
+        if (paramMatch) {
+          cleanSql = paramMatch[1];
+          paramSuffix = ' ' + paramMatch[2];
+        } else {
+          cleanSql = qText;
+          paramSuffix = '';
+        }
+        var formatted = sqlPrettyPrint(cleanSql);
         if (typeof formatted === 'object') {
-          formatted = qText;
+          formatted = cleanSql;
+        }
+        if (paramSuffix) {
+          formatted += paramSuffix;
         }
         var html = '<span class="gt-indent1 d-inline-block" style="white-space: pre-wrap;">' + escapeHtml(formatted) + '</span>';
         if (count) {
