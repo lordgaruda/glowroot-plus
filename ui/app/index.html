@@ -118,6 +118,13 @@
                ng-if="layout.showNavbarError">
           </div>
           <div gt-navbar-item
+               gt-display="N+1 Queries"
+               gt-item-name="nplusOne"
+               gt-url="nplus-one{{queryString(true, true)}}"
+               gt-click="collapseIfNeeded()"
+               ng-if="layout.showNavbarNplusOne">
+          </div>
+          <div gt-navbar-item
                gt-display="JVM"
                gt-item-name="jvm"
                gt-url="jvm/gauges{{queryString(true, false, true)}}"
@@ -337,6 +344,7 @@
 <script src="scripts/controllers/jvm/environment.js"></script>
 <script src="scripts/controllers/jvm/capabilities.js"></script>
 <script src="scripts/controllers/synthetic-monitors.js"></script>
+<script src="scripts/controllers/nplus-one.js"></script>
 <script src="scripts/controllers/incidents.js"></script>
 <script src="scripts/controllers/report.js"></script>
 <script src="scripts/controllers/report/adhoc.js"></script>

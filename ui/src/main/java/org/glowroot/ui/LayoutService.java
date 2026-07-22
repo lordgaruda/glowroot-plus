@@ -223,7 +223,7 @@ class LayoutService {
                 .build();
 
         return createLayout(authentication, showNavbarTransaction, showNavbarError,
-                showNavbarJvm, false, showNavbarIncident, showNavbarReport, showNavbarConfig,
+                showNavbarJvm, showNavbarTransaction, false, showNavbarIncident, showNavbarReport, showNavbarConfig,
                 embeddedAgentRollup);
     }
 
@@ -247,7 +247,7 @@ class LayoutService {
             return createNoAccessLayout(authentication);
         }
         return createLayout(authentication, showNavbarTransaction, showNavbarError, showNavbarJvm,
-                showNavbarSyntheticMonitor, showNavbarIncident, showNavbarReport, showNavbarConfig,
+                showNavbarTransaction, showNavbarSyntheticMonitor, showNavbarIncident, showNavbarReport, showNavbarConfig,
                 null);
     }
 
@@ -261,6 +261,7 @@ class LayoutService {
                 .showNavbarTransaction(false)
                 .showNavbarError(false)
                 .showNavbarJvm(false)
+                .showNavbarNplusOne(false)
                 .showNavbarSyntheticMonitor(false)
                 .showNavbarIncident(false)
                 .showNavbarReport(false)
@@ -276,7 +277,7 @@ class LayoutService {
 
     private ImmutableLayout createLayout(Authentication authentication,
             boolean showNavbarTransaction, boolean showNavbarError, boolean showNavbarJvm,
-            boolean showNavbarSyntheticMonitor, boolean showNavbarIncident,
+            boolean showNavbarNplusOne, boolean showNavbarSyntheticMonitor, boolean showNavbarIncident,
             boolean showNavbarReport, boolean showNavbarConfig,
             @Nullable AgentRollupLayout embeddedAgentRollup) throws Exception {
         List<Long> rollupExpirationMillis = Lists.newArrayList();
@@ -307,6 +308,7 @@ class LayoutService {
                 .showNavbarTransaction(showNavbarTransaction)
                 .showNavbarError(showNavbarError)
                 .showNavbarJvm(showNavbarJvm)
+                .showNavbarNplusOne(showNavbarNplusOne)
                 .showNavbarSyntheticMonitor(showNavbarSyntheticMonitor)
                 .showNavbarIncident(showNavbarIncident)
                 .showNavbarReport(showNavbarReport)
@@ -461,6 +463,7 @@ class LayoutService {
         abstract boolean showNavbarTransaction();
         abstract boolean showNavbarError();
         abstract boolean showNavbarJvm();
+        abstract boolean showNavbarNplusOne();
         abstract boolean showNavbarSyntheticMonitor();
         abstract boolean showNavbarIncident();
         abstract boolean showNavbarReport();

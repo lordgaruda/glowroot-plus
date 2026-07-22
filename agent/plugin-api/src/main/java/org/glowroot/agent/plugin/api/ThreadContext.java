@@ -325,6 +325,15 @@ public interface ThreadContext {
      */
     void setServletRequestInfo(@Nullable ServletRequestInfo servletRequestInfo);
 
+    @Nullable
+    Object getPluginData(String key);
+
+    void putPluginData(String key, @Nullable Object value);
+
+    void setTransactionAttribute(String name, @Nullable String value);
+
+    void removeTransactionAttribute(String name);
+
     interface ServletRequestInfo {
         String getMethod();
         String getContextPath();

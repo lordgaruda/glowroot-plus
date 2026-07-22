@@ -563,6 +563,14 @@ glowroot.run([
         display: 'Transaction count'
       },
       {
+        id: 'transaction:n-plus-one-count',
+        display: 'N+1 query pattern count'
+      },
+      {
+        id: 'transaction:duplicate-query-count',
+        display: 'Duplicate query count'
+      },
+      {
         id: '-empty1-',
         display: '',
         disabled: true

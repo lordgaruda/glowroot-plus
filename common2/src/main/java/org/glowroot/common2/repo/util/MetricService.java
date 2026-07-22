@@ -27,6 +27,10 @@ import org.glowroot.common2.repo.*;
 import org.glowroot.common2.repo.util.RollupLevelService.DataKind;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig.AlertConfig.AlertCondition.MetricCondition;
 import org.glowroot.wire.api.model.CollectorServiceOuterClass.GaugeValueMessage.GaugeValue;
+import org.glowroot.common.live.ImmutableTracePointFilter;
+import org.glowroot.common.live.LiveTraceRepository.TracePoint;
+import org.glowroot.common.live.LiveTraceRepository.TracePointFilter;
+import org.glowroot.common.live.StringComparator;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -74,11 +78,67 @@ class MetricService {
             return getErrorCount(agentRollupId, metricCondition.getTransactionType(),
                     Strings.emptyToNull(metricCondition.getTransactionName()),
                     metricCondition.getErrorMessageFilter(), startTime, endTime, profile);
+        } else if (metric.equals("transaction:n-plus-one-count")) {
+            return getNplusOneCount(agentRollupId, metricCondition.getTransactionType(),
+                    Strings.emptyToNull(metricCondition.getTransactionName()), startTime, endTime, profile);
+        } else if (metric.equals("transaction:duplicate-query-count")) {
+            return getDuplicateQueryCount(agentRollupId, metricCondition.getTransactionType(),
+                    Strings.emptyToNull(metricCondition.getTransactionName()), startTime, endTime, profile);
         } else if (metric.startsWith("gauge:")) {
             return getGaugeValue(agentRollupId, metric.substring("gauge:".length()), startTime,
                     endTime, profile);
         } else {
             throw new IllegalStateException("Unexpected metric: " + metric);
+        }
+    }
+
+    private CompletionStage<Long> getNplusOneCount(String agentRollupId, String transactionType,
+                                                   @Nullable String transactionName, long startTime, long endTime, CassandraProfile profile) {
+        TraceRepository.TraceQuery traceQuery = ImmutableTraceQuery.builder()
+                .transactionType(transactionType)
+                .transactionName(transactionName)
+                .from(startTime)
+                .to(endTime)
+                .build();
+        TracePointFilter filter = ImmutableTracePointFilter.builder()
+                .durationNanosLow(0)
+                .durationNanosHigh(null)
+                .attributeName("n-plus-one-detected")
+                .attributeValueComparator(StringComparator.EQUALS)
+                .attributeValue("true")
+                .build();
+        try {
+            return traceRepository.readSlowPoints(agentRollupId, traceQuery, filter, Integer.MAX_VALUE)
+                    .thenApply(result -> (long) result.records().size());
+        } catch (Exception e) {
+            CompletableFuture<Long> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    private CompletionStage<Long> getDuplicateQueryCount(String agentRollupId, String transactionType,
+                                                         @Nullable String transactionName, long startTime, long endTime, CassandraProfile profile) {
+        TraceRepository.TraceQuery traceQuery = ImmutableTraceQuery.builder()
+                .transactionType(transactionType)
+                .transactionName(transactionName)
+                .from(startTime)
+                .to(endTime)
+                .build();
+        TracePointFilter filter = ImmutableTracePointFilter.builder()
+                .durationNanosLow(0)
+                .durationNanosHigh(null)
+                .attributeName("duplicate-query-detected")
+                .attributeValueComparator(StringComparator.EQUALS)
+                .attributeValue("true")
+                .build();
+        try {
+            return traceRepository.readSlowPoints(agentRollupId, traceQuery, filter, Integer.MAX_VALUE)
+                    .thenApply(result -> (long) result.records().size());
+        } catch (Exception e) {
+            CompletableFuture<Long> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
         }
     }
 
