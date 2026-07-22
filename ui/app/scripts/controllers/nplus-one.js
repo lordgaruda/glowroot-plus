@@ -178,6 +178,12 @@ glowroot.controller('NplusOneCtrl', [
       };
       $location.url('transaction/traces' + queryStrings.encodeObject(traceSearchQuery));
     };
+    $scope.$watch('[range.chartFrom, range.chartTo, range.chartRefresh, range.chartAutoRefresh]',
+        function (newValues, oldValues) {
+          var autoRefresh = newValues[3] !== oldValues[3];
+          refreshData(autoRefresh);
+        });
+
     var priorLocation;
     locationChanges.on($scope, function () {
       var location = {};
@@ -197,7 +203,7 @@ glowroot.controller('NplusOneCtrl', [
         $scope.range.chartTo = location.chartTo;
         $scope.transactionType = location.transactionType;
         charts.applyLast($scope);
-        refreshData(false);
+        $scope.range.chartRefresh++;
         priorLocation = location;
       }
     });
