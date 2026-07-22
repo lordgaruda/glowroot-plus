@@ -158,7 +158,7 @@ public class UiModule {
         jsonServices.add(new ReportJsonService(agentDisplayRepository, configRepository,
                 activeAgentRepository, transactionTypeRepository, aggregateRepository,
                 gaugeValueRepository, liveAggregateRepository, rollupLevelService,
-                reportingExecutor));
+                traceRepository, reportingExecutor));
         jsonServices.add(new ConfigJsonService(transactionTypeRepository, gaugeValueRepository,
                 liveAggregateRepository, configRepository));
         jsonServices.add(new AlertConfigJsonService(configRepository, alertingDisabledRepository,

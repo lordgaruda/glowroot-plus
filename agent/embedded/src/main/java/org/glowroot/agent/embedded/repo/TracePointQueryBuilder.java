@@ -170,7 +170,11 @@ class TracePointQueryBuilder {
         if (limit != 0) {
             // +1 is to identify if limit was exceeded
             builder.appendText(" desc limit ?");
-            builder.addArg(limit + 1);
+            if (limit == Integer.MAX_VALUE) {
+                builder.addArg(Integer.MAX_VALUE);
+            } else {
+                builder.addArg(limit + 1);
+            }
         }
     }
 
