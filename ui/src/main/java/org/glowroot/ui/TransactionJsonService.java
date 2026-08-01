@@ -17,7 +17,6 @@ package org.glowroot.ui;
 
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -124,7 +123,8 @@ class TransactionJsonService {
         List<OverviewAggregate> overviewAggregatesForMerging = Lists.newArrayList();
         for (OverviewAggregate overviewAggregate : overviewAggregates) {
             long captureTime = overviewAggregate.captureTime();
-            if (captureTime > request.from() && captureTime <= request.to()) {
+            if (StackedTimerTotals.captureTimeInMergedRange(captureTime, request.from(),
+                    request.to())) {
                 overviewAggregatesForMerging.add(overviewAggregate);
             }
         }
@@ -723,7 +723,10 @@ class TransactionJsonService {
         DataSeriesHelper dataSeriesHelper =
                 new DataSeriesHelper(liveCaptureTime, dataPointIntervalMillis);
         final int topX = 5;
-        List<String> timerNames = getTopTimerNames(stackedPoints, topX + 1);
+        // Rank top timers using the same capture-time window as the breakdown table, so out-of-range
+        // slope points (fetched only for chart edge sloping) do not skew the series selection.
+        List<String> timerNames = getTopTimerNames(stackedPoints, topX + 1, request.from(),
+                request.to());
         List<DataSeries> dataSeriesList = Lists.newArrayList();
         for (int i = 0; i < Math.min(timerNames.size(), topX); i++) {
             dataSeriesList.add(new DataSeries(timerNames.get(i)));
@@ -795,11 +798,15 @@ class TransactionJsonService {
     }
 
     // calculate top 5 timers
-    private static List<String> getTopTimerNames(List<StackedPoint> stackedPoints, int topX) {
+    private static List<String> getTopTimerNames(List<StackedPoint> stackedPoints, int topX,
+            long from, long to) {
         MutableDoubleMap<String> timerTotals = new MutableDoubleMap<String>();
         for (StackedPoint stackedPoint : stackedPoints) {
-            for (Map.Entry<String, MutableDouble> entry : stackedPoint.getStackedTimers()
-                    .entrySet()) {
+            if (!StackedTimerTotals.captureTimeInMergedRange(
+                    stackedPoint.getOverviewAggregate().captureTime(), from, to)) {
+                continue;
+            }
+            for (Map.Entry<String, MutableDouble> entry : stackedPoint.getStackedTimers().entrySet()) {
                 timerTotals.add(entry.getKey(), entry.getValue().doubleValue());
             }
         }
@@ -807,8 +814,7 @@ class TransactionJsonService {
                 Ordering.natural()
                         .onResultOf(new Function<Map.Entry<String, MutableDouble>, Double>() {
                             @Override
-                            public Double apply(
-                                    Map. /*@Nullable*/ Entry<String, MutableDouble> entry) {
+                            public Double apply(Map. /*@Nullable*/ Entry<String, MutableDouble> entry) {
                                 checkNotNull(entry);
                                 return entry.getValue().doubleValue();
                             }
@@ -830,15 +836,7 @@ class TransactionJsonService {
         private final MutableDoubleMap<String> stackedTimers;
 
         private static StackedPoint create(OverviewAggregate overviewAggregate) {
-            MutableDoubleMap<String> stackedTimers = new MutableDoubleMap<String>();
-            for (Aggregate.Timer rootTimer : overviewAggregate.mainThreadRootTimers()) {
-                // skip root timers
-                for (Aggregate.Timer topLevelTimer : rootTimer.getChildTimerList()) {
-                    // traverse tree starting at top-level (under root) timers
-                    addToStackedTimer(topLevelTimer, stackedTimers);
-                }
-            }
-            return new StackedPoint(overviewAggregate, stackedTimers);
+            return new StackedPoint(overviewAggregate, StackedTimerTotals.create(overviewAggregate));
         }
 
         private StackedPoint(OverviewAggregate overviewAggregate,
@@ -854,24 +852,13 @@ class TransactionJsonService {
         private MutableDoubleMap<String> getStackedTimers() {
             return stackedTimers;
         }
-
-        private static void addToStackedTimer(Aggregate.Timer timer,
-                MutableDoubleMap<String> stackedTimers) {
-            double totalNestedNanos = 0;
-            for (Aggregate.Timer childTimer : timer.getChildTimerList()) {
-                totalNestedNanos += childTimer.getTotalNanos();
-                addToStackedTimer(childTimer, stackedTimers);
-            }
-            String timerName = timer.getName();
-            stackedTimers.add(timerName, timer.getTotalNanos() - totalNestedNanos);
-        }
     }
 
     // by using MutableDouble, two operations (get/put) are not required for each increment,
     // instead just a single get is needed (except for first delta)
     @SuppressWarnings("serial")
-    private static class MutableDoubleMap<K> extends HashMap<K, MutableDouble> {
-        private void add(K key, double delta) {
+    static class MutableDoubleMap<K> extends java.util.HashMap<K, MutableDouble> {
+        void add(K key, double delta) {
             MutableDouble existing = get(key);
             if (existing == null) {
                 put(key, new MutableDouble(delta));
@@ -881,12 +868,12 @@ class TransactionJsonService {
         }
     }
 
-    private static class MutableDouble {
+    static class MutableDouble {
         private double value;
         private MutableDouble(double value) {
             this.value = value;
         }
-        private double doubleValue() {
+        double doubleValue() {
             return value;
         }
     }
