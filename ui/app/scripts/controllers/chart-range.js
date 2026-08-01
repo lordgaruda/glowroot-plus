@@ -102,6 +102,10 @@ glowroot.controller('ChartRangeCtrl', [
     };
 
     $scope.rangeSelections = [
+      60 * 1000, // 1 minute
+      5 * 60 * 1000, // 5 minutes
+      10 * 60 * 1000, // 10 minutes
+      15 * 60 * 1000, // 15 minutes
       30 * 60 * 1000, // 30 minutes
       60 * 60 * 1000, // 60 minutes
       2 * 60 * 60 * 1000, // 2 hours
