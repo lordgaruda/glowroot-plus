@@ -117,6 +117,13 @@
       "default": 1000.0,
       "label": "Stack trace threshold (millis)",
       "description": "Any jdbc call that exceeds this threshold will have a stack trace captured and attached to it. An empty value will not collect any stack traces, a zero value will collect a stack trace for every jdbc call."
+    },
+    {
+      "name": "rawExecutionThreshold",
+      "type": "double",
+      "default": 10000.0,
+      "label": "Raw execution threshold",
+      "description": "Minimum number of raw JDBC query executions within a single transaction to flag as high raw execution for trace filtering."
     }
   ],
   "aspects": [

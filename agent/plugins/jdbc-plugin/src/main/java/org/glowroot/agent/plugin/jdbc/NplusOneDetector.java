@@ -51,6 +51,8 @@ public class NplusOneDetector {
         final Map<String, Integer> exactQueryCounts = new HashMap<String, Integer>();
         // Key: normalized query, Value: first raw query text encountered (for display)
         final Map<String, String> normalizedRawQueryTexts = new HashMap<String, String>();
+        int totalRawExecutions = 0;
+        long totalRowCount = 0;
     }
 
     /**
@@ -79,6 +81,8 @@ public class NplusOneDetector {
             context.putPluginData("nplusOneState", state);
         }
 
+        state.totalRawExecutions++;
+
         // 1. Track normalized query (for N+1 detection)
         String normalizedQuery = normalizeQuery(queryText);
         Integer count = state.normalizedQueryCounts.get(normalizedQuery);
@@ -96,6 +100,50 @@ public class NplusOneDetector {
             state.exactQueryCounts.put(exactQuery, 1);
         } else {
             state.exactQueryCounts.put(exactQuery, exactCount + 1);
+        }
+
+        // Check if raw execution threshold is reached live (query executions or row count)
+        double rawExecutionThresholdDbl = getDoubleProperty(configService, "rawExecutionThreshold", 10000.0);
+        int rawExecutionThreshold = (int) rawExecutionThresholdDbl;
+        if (rawExecutionThreshold > 0) {
+            long totalRaws = Math.max(state.totalRawExecutions, state.totalRowCount);
+            if (totalRaws >= rawExecutionThreshold) {
+                context.setTransactionAttribute("raw-execute-detected", "true");
+                context.setTransactionAttribute("raw-execute-count", String.valueOf(totalRaws));
+                // Force transaction trace capture
+                context.setTransactionSlowThreshold(0, java.util.concurrent.TimeUnit.MILLISECONDS, ThreadContext.Priority.CORE_PLUGIN);
+            }
+        }
+    }
+
+    /**
+     * Records row executions (fetched or updated). Called from ResultSetAspect / StatementAspect methods.
+     */
+    static void recordRows(ThreadContext context, ConfigService configService, long rows) {
+        if (rows <= 0) {
+            return;
+        }
+        BooleanProperty detectEnabled = configService.getBooleanProperty("detectNplusOneQueries");
+        if (!detectEnabled.value()) {
+            return;
+        }
+
+        NplusOneState state = (NplusOneState) context.getPluginData("nplusOneState");
+        if (state == null) {
+            state = new NplusOneState();
+            context.putPluginData("nplusOneState", state);
+        }
+
+        state.totalRowCount += rows;
+
+        double rawExecutionThresholdDbl = getDoubleProperty(configService, "rawExecutionThreshold", 10000.0);
+        int rawExecutionThreshold = (int) rawExecutionThresholdDbl;
+        if (rawExecutionThreshold > 0 && (state.totalRowCount >= rawExecutionThreshold || state.totalRawExecutions >= rawExecutionThreshold)) {
+            long rawCountVal = Math.max(state.totalRawExecutions, state.totalRowCount);
+            context.setTransactionAttribute("raw-execute-detected", "true");
+            context.setTransactionAttribute("raw-execute-count", String.valueOf(rawCountVal));
+            // Force transaction trace capture
+            context.setTransactionSlowThreshold(0, java.util.concurrent.TimeUnit.MILLISECONDS, ThreadContext.Priority.CORE_PLUGIN);
         }
     }
 
@@ -117,16 +165,21 @@ public class NplusOneDetector {
             int nplusOneThreshold = (int) nplusOneThresholdDbl;
             double duplicateThresholdDbl = getDoubleProperty(configService, "duplicateQueryThreshold", 3.0);
             int duplicateThreshold = (int) duplicateThresholdDbl;
+            double rawExecutionThresholdDbl = getDoubleProperty(configService, "rawExecutionThreshold", 10000.0);
+            int rawExecutionThreshold = (int) rawExecutionThresholdDbl;
 
             List<String> nplusOneQueries = new ArrayList<String>();
             List<String> duplicateQueries = new ArrayList<String>();
+            List<String> rawExecuteQueries = new ArrayList<String>();
             int nplusOneCount = 0;
             int duplicateCount = 0;
+            int totalRawExecutions = 0;
             int maxRepeat = 0;
 
             // Analyze N+1 Queries (from normalized counts)
             for (Map.Entry<String, Integer> entry : state.normalizedQueryCounts.entrySet()) {
                 int execCount = entry.getValue();
+                totalRawExecutions += execCount;
                 if (execCount > maxRepeat) {
                     maxRepeat = execCount;
                 }
@@ -140,6 +193,17 @@ public class NplusOneDetector {
                     }
                     if (nplusOneQueries.size() < MAX_OFFENDING_QUERIES) {
                         nplusOneQueries.add(displayText + " [x" + execCount + "]");
+                    }
+                }
+
+                if (rawExecutionThreshold > 0) {
+                    String rawText = state.normalizedRawQueryTexts.get(entry.getKey());
+                    String displayText = rawText != null ? rawText : entry.getKey();
+                    if (displayText.length() > MAX_QUERY_TEXT_LENGTH) {
+                        displayText = displayText.substring(0, MAX_QUERY_TEXT_LENGTH) + "...";
+                    }
+                    if (rawExecuteQueries.size() < MAX_OFFENDING_QUERIES) {
+                        rawExecuteQueries.add(displayText + " [x" + execCount + "]");
                     }
                 }
             }
@@ -180,6 +244,21 @@ public class NplusOneDetector {
                 context.removeTransactionAttribute("duplicate-queries");
                 for (String query : duplicateQueries) {
                     context.addTransactionAttribute("duplicate-queries", query);
+                }
+                // Force transaction trace capture
+                context.setTransactionSlowThreshold(0, java.util.concurrent.TimeUnit.MILLISECONDS, ThreadContext.Priority.CORE_PLUGIN);
+            }
+
+            long totalRaws = Math.max(totalRawExecutions, state.totalRowCount);
+            if (rawExecutionThreshold > 0 && (totalRaws >= rawExecutionThreshold || maxRepeat >= rawExecutionThreshold)) {
+                context.setTransactionAttribute("raw-execute-detected", "true");
+                context.setTransactionAttribute("raw-execute-count",
+                        String.valueOf(totalRaws));
+                context.setTransactionAttribute("raw-execute-max-repeat",
+                        String.valueOf(maxRepeat));
+                context.removeTransactionAttribute("raw-execute-queries");
+                for (String query : rawExecuteQueries) {
+                    context.addTransactionAttribute("raw-execute-queries", query);
                 }
                 // Force transaction trace capture
                 context.setTransactionSlowThreshold(0, java.util.concurrent.TimeUnit.MILLISECONDS, ThreadContext.Priority.CORE_PLUGIN);

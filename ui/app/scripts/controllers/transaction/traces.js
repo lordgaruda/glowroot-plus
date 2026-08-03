@@ -412,8 +412,13 @@ glowroot.controller('TracesCtrl', [
       appliedFilter.userComparator = $location.search()['user-comparator'] || 'begins';
       appliedFilter.user = $location.search().user || '';
       appliedFilter.attributeName = $location.search()['custom-attribute-name'] || '';
-      appliedFilter.attributeValueComparator = $location.search()['custom-attribute-value-comparator'] || 'begins';
-      appliedFilter.attributeValue = $location.search()['custom-attribute-value'] || '';
+      appliedFilter.attributeValueComparator = $location.search()['custom-attribute-value-comparator'] || 'equals';
+      var rawAttrVal = $location.search()['custom-attribute-value'];
+      if (rawAttrVal === undefined && appliedFilter.attributeName.indexOf('-detected') !== -1) {
+        appliedFilter.attributeValue = 'true';
+      } else {
+        appliedFilter.attributeValue = rawAttrVal || '';
+      }
       appliedFilter.limit = Number($location.search().limit) || defaultFilterLimit;
 
       if (priorAppliedFilter !== undefined && !angular.equals(appliedFilter, priorAppliedFilter)) {

@@ -33,6 +33,47 @@ glowroot.controller('TransactionSidebarCtrl', [
 
     $scope.summarySortOrders = summarySortOrders;
 
+    $scope.rawExecutionThresholdDisplay = '10K raws';
+
+    function loadRawExecutionThreshold() {
+      var agentId = $scope.agentId || $scope.agentRollupId || '';
+      var queryData = {
+        agentId: agentId,
+        pluginId: 'jdbc'
+      };
+      $http.get('backend/config/plugins' + queryStrings.encodeObject(queryData))
+          .then(function (response) {
+            if (response.data && response.data.properties) {
+              angular.forEach(response.data.properties, function (prop) {
+                if (prop.name === 'rawExecutionThreshold' && prop.value) {
+                  var val = Number(prop.value);
+                  if (!isNaN(val) && val > 0) {
+                    if (val >= 1000 && val % 1000 === 0) {
+                      $scope.rawExecutionThresholdDisplay = (val / 1000) + 'K raws';
+                    } else {
+                      $scope.rawExecutionThresholdDisplay = val + ' raws';
+                    }
+                  }
+                }
+              });
+            }
+          }, function () {
+            // keep default 10K raws on error
+          });
+    }
+    loadRawExecutionThreshold();
+
+    $scope.traceFilterQueryString = function (attrName, attrValue) {
+      var query = angular.copy($location.search());
+      query['custom-attribute-name'] = attrName;
+      query['custom-attribute-value-comparator'] = 'equals';
+      query['custom-attribute-value'] = attrValue;
+      if ($scope.transactionType) {
+        query['transaction-type'] = $scope.transactionType;
+      }
+      return queryStrings.encodeObject(query);
+    };
+
     $scope.summaryLimit = 10;
     $scope.summariesLoadingMore = 0;
 

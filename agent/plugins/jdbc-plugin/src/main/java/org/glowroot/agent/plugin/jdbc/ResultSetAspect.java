@@ -18,6 +18,7 @@ package org.glowroot.agent.plugin.jdbc;
 import org.glowroot.agent.plugin.api.Agent;
 import org.glowroot.agent.plugin.api.Logger;
 import org.glowroot.agent.plugin.api.QueryEntry;
+import org.glowroot.agent.plugin.api.ThreadContext;
 import org.glowroot.agent.plugin.api.Timer;
 import org.glowroot.agent.plugin.api.checker.NonNull;
 import org.glowroot.agent.plugin.api.config.BooleanProperty;
@@ -58,6 +59,7 @@ public class ResultSetAspect {
         }
         @OnReturn
         public static void onReturn(@BindReturn boolean currentRowValid,
+                ThreadContext context,
                 @BindReceiver HasStatementMirrorMixin resultSet) {
             StatementMirror mirror = resultSet.glowroot$getStatementMirror();
             if (mirror == null) {
@@ -74,6 +76,7 @@ public class ResultSetAspect {
                 // ResultSet.getRow() is sometimes not super duper fast due to ResultSet
                 // wrapping and other checks, so this optimizes the common case
                 lastQueryEntry.incrementCurrRow();
+                NplusOneDetector.recordRows(context, configService, 1);
             } else {
                 lastQueryEntry.rowNavigationAttempted();
             }
@@ -99,7 +102,7 @@ public class ResultSetAspect {
             return onBeforeCommon(resultSet);
         }
         @OnReturn
-        public static void onReturn(@BindReceiver HasStatementMirrorMixin resultSet) {
+        public static void onReturn(ThreadContext context, @BindReceiver HasStatementMirrorMixin resultSet) {
             try {
                 StatementMirror mirror = resultSet.glowroot$getStatementMirror();
                 if (mirror == null) {
@@ -112,7 +115,9 @@ public class ResultSetAspect {
                     // tracing must be disabled (e.g. exceeded trace entry limit)
                     return;
                 }
-                lastQueryEntry.setCurrRow(((ResultSet) resultSet).getRow());
+                int row = ((ResultSet) resultSet).getRow();
+                lastQueryEntry.setCurrRow(row);
+                NplusOneDetector.recordRows(context, configService, row);
             } catch (Exception e) {
                 logger.warn(e.getMessage(), e);
             }

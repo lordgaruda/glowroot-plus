@@ -488,6 +488,7 @@ public class JdbcPluginIT {
 
     @Test
     public void testNplusOneDetection() throws Exception {
+        container.getConfigService().setPluginProperty("jdbc", "rawExecutionThreshold", 8.0);
         // when
         Trace trace = container.execute(ExecuteNplusOneQueries.class);
 
@@ -497,6 +498,7 @@ public class JdbcPluginIT {
 
         boolean foundNplusOne = false;
         boolean foundDuplicate = false;
+        boolean foundRawExecute = false;
 
         for (Trace.Attribute attribute : attributes) {
             if (attribute.getName().equals("n-plus-one-detected") && attribute.getValueList().contains("true")) {
@@ -505,10 +507,14 @@ public class JdbcPluginIT {
             if (attribute.getName().equals("duplicate-query-detected") && attribute.getValueList().contains("true")) {
                 foundDuplicate = true;
             }
+            if (attribute.getName().equals("raw-execute-detected") && attribute.getValueList().contains("true")) {
+                foundRawExecute = true;
+            }
         }
 
         assertThat(foundNplusOne).isTrue();
         assertThat(foundDuplicate).isTrue();
+        assertThat(foundRawExecute).isTrue();
     }
 
     public static class ExecuteNplusOneQueries implements AppUnderTest, TransactionMarker {

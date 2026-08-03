@@ -34,7 +34,46 @@
            style="padding-left: 1.25rem;">
           {{display}}
         </a>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-header" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Filter Traces</div>
+        <a class="dropdown-item"
+           ng-href="transaction/traces{{traceFilterQueryString('n-plus-one-detected', 'true')}}"
+           style="padding-left: 1.25rem;">
+          N+1 Query Traces
+        </a>
+        <a class="dropdown-item"
+           ng-href="transaction/traces{{traceFilterQueryString('duplicate-query-detected', 'true')}}"
+           style="padding-left: 1.25rem;">
+          Duplicate Query Traces
+        </a>
+        <a class="dropdown-item"
+           ng-href="transaction/traces{{traceFilterQueryString('raw-execute-detected', 'true')}}"
+           style="padding-left: 1.25rem;">
+          High Raw Execution (≥ {{rawExecutionThresholdDisplay}})
+        </a>
       </div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom: 4px;">
+    <div class="card-header" style="font-weight: 600; padding: 0.4rem 1.25rem; font-size: 0.85rem; background-color: rgba(0,0,0,0.03);">
+      Trace Filters
+    </div>
+    <div class="list-group list-group-flush" style="font-size: 0.85rem;">
+      <a class="list-group-item list-group-item-action"
+         ng-href="transaction/traces{{traceFilterQueryString('n-plus-one-detected', 'true')}}"
+         style="padding: 0.4rem 1.25rem;">
+        <i class="fas fa-filter text-warning mr-1"></i> N+1 Query Traces
+      </a>
+      <a class="list-group-item list-group-item-action"
+         ng-href="transaction/traces{{traceFilterQueryString('duplicate-query-detected', 'true')}}"
+         style="padding: 0.4rem 1.25rem;">
+        <i class="fas fa-copy text-info mr-1"></i> Duplicate Query Traces
+      </a>
+      <a class="list-group-item list-group-item-action"
+         ng-href="transaction/traces{{traceFilterQueryString('raw-execute-detected', 'true')}}"
+         style="padding: 0.4rem 1.25rem;">
+        <i class="fas fa-bolt text-danger mr-1"></i> High Raw Execution (≥ {{rawExecutionThresholdDisplay}})
+      </a>
     </div>
   </div>
   <div class="card">
