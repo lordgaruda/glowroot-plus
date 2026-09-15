@@ -142,6 +142,8 @@ public class ThreadContextImpl implements ThreadContextPlus {
     // transaction thread context
     private @Nullable ThreadContextImpl innerTransactionThreadContext;
 
+    private final Map<String, Object> pluginData = new HashMap<String, Object>();
+
     ThreadContextImpl(Transaction transaction, @Nullable TraceEntryImpl parentTraceEntry,
             @Nullable TraceEntryImpl parentThreadContextPriorEntry, MessageSupplier messageSupplier,
             TimerName rootTimerName, long startTick, boolean captureThreadStats,
@@ -933,6 +935,46 @@ public class ThreadContextImpl implements ThreadContextPlus {
             transaction.addAttribute(name, value);
         } else {
             innerTransactionThreadContext.addTransactionAttribute(name, value);
+        }
+    }
+
+    @Override
+    public @Nullable Object getPluginData(String key) {
+        return pluginData.get(key);
+    }
+
+    @Override
+    public void putPluginData(String key, @Nullable Object value) {
+        if (value == null) {
+            pluginData.remove(key);
+        } else {
+            pluginData.put(key, value);
+        }
+    }
+
+    @Override
+    public void setTransactionAttribute(String name, @Nullable String value) {
+        if (name == null) {
+            logger.error("setTransactionAttribute(): argument 'name' must be non-null");
+            return;
+        }
+        if (innerTransactionThreadContext == null) {
+            transaction.setAttribute(name, value);
+        } else {
+            innerTransactionThreadContext.setTransactionAttribute(name, value);
+        }
+    }
+
+    @Override
+    public void removeTransactionAttribute(String name) {
+        if (name == null) {
+            logger.error("removeTransactionAttribute(): argument 'name' must be non-null");
+            return;
+        }
+        if (innerTransactionThreadContext == null) {
+            transaction.removeAttribute(name);
+        } else {
+            innerTransactionThreadContext.removeTransactionAttribute(name);
         }
     }
 

@@ -45,6 +45,7 @@ import org.glowroot.agent.plugin.jdbc.PreparedStatementMirror.ByteArrayParameter
 import org.glowroot.agent.plugin.jdbc.PreparedStatementMirror.StreamingParameterValue;
 import org.glowroot.agent.plugin.jdbc.message.BatchPreparedStatementMessageSupplier;
 import org.glowroot.agent.plugin.jdbc.message.BatchPreparedStatementMessageSupplier2;
+import org.glowroot.agent.plugin.jdbc.message.BindParameterList;
 import org.glowroot.agent.plugin.jdbc.message.PreparedStatementMessageSupplier;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -319,6 +320,7 @@ public class StatementAspect {
             QueryEntry query = context.startQueryEntry(QUERY_TYPE, sql,
                     QueryMessageSupplier.create("jdbc query: "), timerName);
             mirror.setLastQueryEntry(query);
+            NplusOneDetector.recordQuery(context, configService, sql, null);
             return query;
         }
         @OnReturn
@@ -393,9 +395,11 @@ public class StatementAspect {
         }
         @OnReturn
         public static void onReturn(@BindReturn int rowCount,
+                ThreadContext context,
                 @BindTraveler @Nullable QueryEntry queryEntry) {
             if (queryEntry != null) {
                 queryEntry.setCurrRow(rowCount);
+                NplusOneDetector.recordRows(context, configService, rowCount);
                 queryEntry.endWithLocationStackTrace(
                         JdbcPluginProperties.stackTraceThresholdMillis(), MILLISECONDS);
             }
@@ -436,6 +440,7 @@ public class StatementAspect {
             QueryEntry queryEntry =
                     context.startQueryEntry(QUERY_TYPE, queryText, queryMessageSupplier, timerName);
             mirror.setLastQueryEntry(queryEntry);
+            NplusOneDetector.recordQuery(context, configService, queryText, mirror.getParameters());
             return queryEntry;
         }
         @OnReturn

@@ -259,7 +259,26 @@ glowroot.factory('charts', [
           show: false
         }
       };
-      chartState.plot = $.plot($chart, data, $.extend(true, options, chartOptions));
+      var mergedOptions = $.extend(true, options, chartOptions);
+      var hasExplicitMax = chartOptions && chartOptions.yaxis && chartOptions.yaxis.max !== undefined;
+      if (!hasExplicitMax && data && data.length) {
+        var hasData = false;
+        for (var i = 0; i < data.length; i++) {
+          var series = data[i];
+          if (angular.isArray(series) && series.length) {
+            hasData = true;
+            break;
+          }
+          if (series && angular.isArray(series.data) && series.data.length) {
+            hasData = true;
+            break;
+          }
+        }
+        if (hasData) {
+          mergedOptions.yaxis.max = undefined;
+        }
+      }
+      chartState.plot = $.plot($chart, data, mergedOptions);
       chartState.plot.getAxes().yaxis.options.max = undefined;
       $(document).off('touchstart.chart');
       $(document).on('touchstart.chart', function () {

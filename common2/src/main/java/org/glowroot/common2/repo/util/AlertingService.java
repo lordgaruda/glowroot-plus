@@ -294,6 +294,10 @@ public class AlertingService {
             message.append("Average");
         } else if (metric.equals("transaction:count")) {
             message.append("Transaction count");
+        } else if (metric.equals("transaction:n-plus-one-count")) {
+            message.append("N+1 query pattern count");
+        } else if (metric.equals("transaction:duplicate-query-count")) {
+            message.append("Duplicate query count");
         } else if (metric.equals("error:rate")) {
             message.append("Error rate");
         } else if (metric.equals("error:count")) {
@@ -326,6 +330,10 @@ public class AlertingService {
             message.append(
                     AlertingService.getWithUnit(metricCondition.getThreshold(), "millisecond"));
         } else if (metric.equals("transaction:count")) {
+            message.append(metricCondition.getThreshold());
+        } else if (metric.equals("transaction:n-plus-one-count")) {
+            message.append(metricCondition.getThreshold());
+        } else if (metric.equals("transaction:duplicate-query-count")) {
             message.append(metricCondition.getThreshold());
         } else if (metric.equals("error:rate")) {
             message.append(metricCondition.getThreshold());
@@ -514,7 +522,9 @@ public class AlertingService {
 
     public static boolean hasMinTransactionCount(String metric) {
         return hasTransactionTypeAndName(metric) && !metric.equals("transaction:count")
-                && !metric.equals("error:count");
+                && !metric.equals("error:count")
+                && !metric.equals("transaction:n-plus-one-count")
+                && !metric.equals("transaction:duplicate-query-count");
     }
 
     public static boolean hasErrorMessageFilter(String metric) {

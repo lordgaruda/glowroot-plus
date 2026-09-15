@@ -60,6 +60,35 @@ HandlebarsRendering = (function () {
     return buffer;
   });
 
+  Handlebars.registerHelper('ifEq', function (a, b, options) {
+    if (a === b) {
+      return options.fn(this);
+    }
+    return options.inverse(this);
+  });
+
+  Handlebars.registerHelper('shortenQuery', function (value) {
+    if (!value) {
+      return '';
+    }
+    var match = value.match(/^(.*)\s+\[x(\d+)]$/);
+    var queryText, countStr;
+    if (match) {
+      queryText = match[1];
+      countStr = ' [x' + match[2] + ']';
+    } else {
+      queryText = value;
+      countStr = '';
+    }
+    queryText = queryText.replace(/\s+/g, ' ').trim();
+    var limit = queryTextLength || 120;
+    if (queryText.length > limit) {
+      var half = Math.floor(limit / 2);
+      return queryText.slice(0, half) + ' ... ' + queryText.slice(-half) + countStr;
+    }
+    return queryText + countStr;
+  });
+
   function traverseTimers(timers, callback) {
     function traverse(timer, depth) {
       callback(timer, depth);
@@ -1167,6 +1196,7 @@ HandlebarsRendering = (function () {
 
       var expandedTraceEntryNode = expanded.find('.gt-expanded-trace-entry');
       var expandedTraceQueryNode = expanded.find('.gt-expanded-trace-query');
+      var expandedNplusOneQueryNode = expanded.find('.gt-expanded-nplusone-query');
       var $traceParent;
       var agentId;
       var alreadyDoneAfter;
@@ -1310,6 +1340,46 @@ HandlebarsRendering = (function () {
         } else {
           doAfter();
         }
+      } else if (expandedNplusOneQueryNode.length) {
+        gtClipboard($clipboardIcon, clipboardContainer, function () {
+          return clipTextNode.text();
+        });
+        var rawText = expandedNplusOneQueryNode.text().trim();
+        var match = rawText.match(/^(.*)\s+\[x(\d+)]$/);
+        var qText, count;
+        if (match) {
+          qText = match[1];
+          count = match[2];
+        } else {
+          qText = rawText;
+          count = null;
+        }
+        var paramMatch = qText.match(/^(.*?)\s+(\[[^\]]+\])$/);
+        var cleanSql, paramSuffix;
+        if (paramMatch) {
+          cleanSql = paramMatch[1];
+          paramSuffix = ' ' + paramMatch[2];
+        } else {
+          cleanSql = qText;
+          paramSuffix = '';
+        }
+        var formatted = sqlPrettyPrint(cleanSql);
+        if (typeof formatted === 'object') {
+          formatted = cleanSql;
+        }
+        if (paramSuffix) {
+          formatted += paramSuffix;
+        }
+        var html = '<span class="gt-indent1 d-inline-block" style="white-space: pre-wrap;">' + escapeHtml(formatted) + '</span>';
+        if (count) {
+          html += '\n\n<span class="gt-indent2">executions:</span>\n\n<span class="gt-indent2">  ' + count + ' times</span>';
+        }
+        expanded.addClass('gt-padding-top-override');
+        expanded.css('padding-bottom', '10px');
+        var $message = expanded.find('.gt-pre-wrap');
+        $message.html(html);
+        $message.css('min-width', 0.6 * unexpanded.parent().width());
+        doAfter();
       } else {
         gtClipboard($clipboardIcon, clipboardContainer, function () {
           return clipTextNode.text();

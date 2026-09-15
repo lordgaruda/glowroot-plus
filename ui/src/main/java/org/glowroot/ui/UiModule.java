@@ -158,7 +158,7 @@ public class UiModule {
         jsonServices.add(new ReportJsonService(agentDisplayRepository, configRepository,
                 activeAgentRepository, transactionTypeRepository, aggregateRepository,
                 gaugeValueRepository, liveAggregateRepository, rollupLevelService,
-                reportingExecutor));
+                traceRepository, reportingExecutor));
         jsonServices.add(new ConfigJsonService(transactionTypeRepository, gaugeValueRepository,
                 liveAggregateRepository, configRepository));
         jsonServices.add(new AlertConfigJsonService(configRepository, alertingDisabledRepository,
@@ -169,6 +169,7 @@ public class UiModule {
         jsonServices.add(new GaugeConfigJsonService(configRepository, liveJvmService));
         jsonServices.add(new InstrumentationConfigJsonService(central, configRepository,
                 liveWeavingService, liveJvmService));
+        jsonServices.add(new NplusOneJsonService(traceRepository, clock));
         jsonServices.add(adminJsonService);
 
         if (central) {
@@ -200,6 +201,7 @@ public class UiModule {
         httpServices.put(Pattern.compile("^/report/.*$"), indexHtmlHttpService);
         httpServices.put(Pattern.compile("^/config/.*$"), indexHtmlHttpService);
         httpServices.put(Pattern.compile("^/admin/.*$"), indexHtmlHttpService);
+        httpServices.put(Pattern.compile("^/nplus-one$"), indexHtmlHttpService);
         httpServices.put(Pattern.compile("^/profile/.*$"), indexHtmlHttpService);
         httpServices.put(Pattern.compile("^/login$"), indexHtmlHttpService);
         // export service is not bound under /backend since the export url is visible to users

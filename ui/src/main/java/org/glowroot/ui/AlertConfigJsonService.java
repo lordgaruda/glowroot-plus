@@ -289,6 +289,10 @@ class AlertConfigJsonService {
             sb.append("average");
         } else if (metric.equals("transaction:count")) {
             sb.append("transaction count");
+        } else if (metric.equals("transaction:n-plus-one-count")) {
+            sb.append("N+1 query pattern count");
+        } else if (metric.equals("transaction:duplicate-query-count")) {
+            sb.append("duplicate query count");
         } else if (metric.equals("error:rate")) {
             sb.append("error rate");
         } else if (metric.equals("error:count")) {
@@ -323,6 +327,10 @@ class AlertConfigJsonService {
         if (metric.equals("transaction:x-percentile") || metric.equals("transaction:average")) {
             sb.append(AlertingService.getWithUnit(metricCondition.getThreshold(), "millisecond"));
         } else if (metric.equals("transaction:count")) {
+            sb.append(Formatting.displaySixDigitsOfPrecision(metricCondition.getThreshold()));
+        } else if (metric.equals("transaction:n-plus-one-count")) {
+            sb.append(Formatting.displaySixDigitsOfPrecision(metricCondition.getThreshold()));
+        } else if (metric.equals("transaction:duplicate-query-count")) {
             sb.append(Formatting.displaySixDigitsOfPrecision(metricCondition.getThreshold()));
         } else if (metric.equals("error:rate")) {
             sb.append(Formatting.displaySixDigitsOfPrecision(metricCondition.getThreshold()));

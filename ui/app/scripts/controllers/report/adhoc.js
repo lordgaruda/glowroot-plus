@@ -186,7 +186,7 @@ glowroot.controller('ReportAdhocCtrl', [
       var metric = $scope.report.metric;
       if (metric.lastIndexOf('gauge:', 0) === 0) {
         return $filter('gtGaugeValue')(value);
-      } else if (metric === 'transaction:count' || metric === 'error:count') {
+      } else if (metric === 'transaction:count' || metric === 'error:count' || metric === 'transaction:n-plus-one-count' || metric === 'transaction:duplicate-query-count') {
         return $filter('number')(value);
       } else if (metric === 'error:rate') {
         return $filter('gtMillis')(value) + ' %';
@@ -787,6 +787,8 @@ glowroot.controller('ReportAdhocCtrl', [
         path = 'error/messages';
       } else if (appliedReport.metric === 'error:count') {
         path = 'error/messages';
+      } else if (appliedReport.metric === 'transaction:n-plus-one-count' || appliedReport.metric === 'transaction:duplicate-query-count') {
+        path = 'nplus-one';
       } else if (appliedReport.metric.indexOf('gauge:') === 0) {
         path = 'jvm/gauges';
       }

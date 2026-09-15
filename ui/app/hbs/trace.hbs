@@ -100,7 +100,48 @@
   <div>
     <!-- note: surrounding div is for nicer copy paste result -->
     <div class="gt-trace-attr-name">{{key}}:&nbsp;</div>
-    <div class="gt-trace-attr-value">{{value}}</div>
+    {{#ifEq key "n-plus-one-queries"}}
+      <div class="gt-trace-attr-value" style="vertical-align: bottom;">
+        <div class="d-inline-block gt-unexpanded-content gt-link-color gt-monospace">
+          {{shortenQuery value}}
+        </div>
+        <div class="d-inline-block gt-expanded-content gt-with-clip d-none"
+             style="position: relative; display: inline-block;">
+          <i class="fas fa-clipboard gt-clip"></i>
+          <div class="gt-break-word gt-pre-wrap gt-monospace gt-clip-text gt-expanded-nplusone-query"><!--
+            -->{{value}}<!--
+       --></div>
+        </div>
+      </div>
+    {{else}}{{#ifEq key "duplicate-queries"}}
+      <div class="gt-trace-attr-value" style="vertical-align: bottom;">
+        <div class="d-inline-block gt-unexpanded-content gt-link-color gt-monospace">
+          {{shortenQuery value}}
+        </div>
+        <div class="d-inline-block gt-expanded-content gt-with-clip d-none"
+             style="position: relative; display: inline-block;">
+          <i class="fas fa-clipboard gt-clip"></i>
+          <div class="gt-break-word gt-pre-wrap gt-monospace gt-clip-text gt-expanded-nplusone-query"><!--
+            -->{{value}}<!--
+       --></div>
+        </div>
+      </div>
+    {{else}}{{#ifEq key "raw-execute-queries"}}
+      <div class="gt-trace-attr-value" style="vertical-align: bottom;">
+        <div class="d-inline-block gt-unexpanded-content gt-link-color gt-monospace">
+          {{shortenQuery value}}
+        </div>
+        <div class="d-inline-block gt-expanded-content gt-with-clip d-none"
+             style="position: relative; display: inline-block;">
+          <i class="fas fa-clipboard gt-clip"></i>
+          <div class="gt-break-word gt-pre-wrap gt-monospace gt-clip-text gt-expanded-nplusone-query"><!--
+            -->{{value}}<!--
+       --></div>
+        </div>
+      </div>
+    {{else}}
+      <div class="gt-trace-attr-value">{{value}}</div>
+    {{/ifEq}}{{/ifEq}}{{/ifEq}}
   </div>
 {{/eachKeyValuePair}}
 {{#if detail}}

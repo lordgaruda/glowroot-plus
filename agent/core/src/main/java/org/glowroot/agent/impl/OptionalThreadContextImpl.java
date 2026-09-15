@@ -243,6 +243,35 @@ class OptionalThreadContextImpl implements ThreadContextPlus {
     }
 
     @Override
+    public @Nullable Object getPluginData(String key) {
+        if (threadContext == null) {
+            return null;
+        }
+        return threadContext.getPluginData(key);
+    }
+
+    @Override
+    public void putPluginData(String key, @Nullable Object value) {
+        if (threadContext != null) {
+            threadContext.putPluginData(key, value);
+        }
+    }
+
+    @Override
+    public void setTransactionAttribute(String name, @Nullable String value) {
+        if (threadContext != null) {
+            threadContext.setTransactionAttribute(name, value);
+        }
+    }
+
+    @Override
+    public void removeTransactionAttribute(String name) {
+        if (threadContext != null) {
+            threadContext.removeTransactionAttribute(name);
+        }
+    }
+
+    @Override
     public void setTransactionSlowThreshold(long threshold, TimeUnit unit, int priority) {
         if (threadContext != null) {
             threadContext.setTransactionSlowThreshold(threshold, unit, priority);

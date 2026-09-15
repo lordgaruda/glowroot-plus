@@ -20,8 +20,10 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -38,7 +40,13 @@ import com.google.common.collect.Sets;
 import com.google.common.io.CharStreams;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.glowroot.common.live.ImmutableTracePointFilter;
+import org.glowroot.common.live.LiveTraceRepository.TracePoint;
+import org.glowroot.common.live.LiveTraceRepository.TracePointFilter;
+import org.glowroot.common.live.StringComparator;
+import org.glowroot.common.model.Result;
 import org.glowroot.common2.repo.*;
+import org.glowroot.common2.repo.TraceRepository.TraceQuery;
 import org.immutables.value.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +95,7 @@ class ReportJsonService {
     private final GaugeValueRepository gaugeValueRepository;
     private final LiveAggregateRepository liveAggregateRepository;
     private final RollupLevelService rollupLevelService;
+    private final TraceRepository traceRepository;
 
     private final ExecutorService executor;
 
@@ -95,7 +104,8 @@ class ReportJsonService {
             TransactionTypeRepository transactionTypeRepository,
             AggregateRepository aggregateRepository, GaugeValueRepository gaugeValueRepository,
             LiveAggregateRepository liveAggregateRepository,
-            RollupLevelService rollupLevelService, ExecutorService executor) {
+            RollupLevelService rollupLevelService, TraceRepository traceRepository,
+            ExecutorService executor) {
         this.agentDisplayRepository = agentDisplayRepository;
         this.configRepository = configRepository;
         this.activeAgentRepository = activeAgentRepository;
@@ -104,6 +114,7 @@ class ReportJsonService {
         this.gaugeValueRepository = gaugeValueRepository;
         this.liveAggregateRepository = liveAggregateRepository;
         this.rollupLevelService = rollupLevelService;
+        this.traceRepository = traceRepository;
         this.executor = executor;
     }
 
@@ -369,6 +380,12 @@ class ReportJsonService {
         } else if (metric.equals("error:count")) {
             return getDataSeriesForThroughput(agentRollupId, query, rollupCaptureTimeFn,
                     request.rollup(), timeZone, gapMillis, new ErrorCountCalculator());
+        } else if (metric.equals("transaction:n-plus-one-count")) {
+            return getDataSeriesForTraceAttributeCount(agentRollupId, query, rollupCaptureTimeFn,
+                    request.rollup(), timeZone, gapMillis, "n-plus-one-detected");
+        } else if (metric.equals("transaction:duplicate-query-count")) {
+            return getDataSeriesForTraceAttributeCount(agentRollupId, query, rollupCaptureTimeFn,
+                    request.rollup(), timeZone, gapMillis, "duplicate-query-detected");
         } else if (metric.equals("transaction:timer-inclusive")) {
             return getDataSeriesForBreakdownTimer(agentRollupId, query,
                     checkNotNull(request.timerName()), BreakdownTimerMetrics.Kind.INCLUSIVE_NANOS,
@@ -587,6 +604,62 @@ class ReportJsonService {
         if (overall != null) {
             dataSeries.setOverall(overall);
         }
+        return dataSeries;
+    }
+
+    private DataSeries getDataSeriesForTraceAttributeCount(String agentRollupId, AggregateQuery query,
+            RollupCaptureTimeFn rollupCaptureTimeFn, ROLLUP rollup, TimeZone timeZone,
+            double gapMillis, String attributeName) throws Exception {
+
+        DataSeries dataSeries =
+                new DataSeries(agentDisplayRepository.readFullDisplay(agentRollupId).toCompletableFuture().get());
+
+        TraceQuery traceQuery = ImmutableTraceQuery.builder()
+                .transactionType(query.transactionType())
+                .transactionName(query.transactionName())
+                .from(query.from())
+                .to(query.to())
+                .build();
+
+        TracePointFilter filter = ImmutableTracePointFilter.builder()
+                .durationNanosLow(0)
+                .durationNanosHigh(null)
+                .attributeName(attributeName)
+                .attributeValueComparator(StringComparator.EQUALS)
+                .attributeValue("true")
+                .build();
+
+        Result<TracePoint> result = traceRepository.readSlowPoints(agentRollupId, traceQuery, filter, Integer.MAX_VALUE)
+                .toCompletableFuture().get();
+
+        if (result.records().isEmpty()) {
+            return dataSeries;
+        }
+
+        Map<Long, Long> countsByCaptureTime = new TreeMap<Long, Long>();
+        for (TracePoint point : result.records()) {
+            long rollupCaptureTime = rollupCaptureTimeFn.apply(point.captureTime());
+            Long currentCount = countsByCaptureTime.get(rollupCaptureTime);
+            if (currentCount == null) {
+                countsByCaptureTime.put(rollupCaptureTime, 1L);
+            } else {
+                countsByCaptureTime.put(rollupCaptureTime, currentCount + 1);
+            }
+        }
+
+        Long priorCaptureTime = null;
+        long totalCount = 0;
+        for (Map.Entry<Long, Long> entry : countsByCaptureTime.entrySet()) {
+            long captureTime = entry.getKey();
+            long count = entry.getValue();
+            totalCount += count;
+            if (priorCaptureTime != null && captureTime - priorCaptureTime > gapMillis) {
+                dataSeries.addNull();
+            }
+            dataSeries.add(getIntervalAverage(rollup, timeZone, captureTime), (double) count);
+            priorCaptureTime = captureTime;
+        }
+        dataSeries.setOverall((double) totalCount);
         return dataSeries;
     }
 

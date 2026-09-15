@@ -825,9 +825,17 @@ class WeavingMethodVisitor extends AdviceAdapter {
             loadLocal(enabledLocal);
             visitJumpInsn(IFEQ, onAfterBlockEnd);
         }
+        Object[] stack;
+        if (insideCatchHandler) {
+            stack = new Object[] {"java/lang/Throwable"};
+        } else if (returnType.getSort() == Type.VOID) {
+            stack = new Object[] {};
+        } else {
+            stack = new Object[] {convert(returnType)};
+        }
         loadMethodParameters(advice.onAfterParameters(), 0, travelerLocals.get(advice),
                 advice.adviceType(), OnAfter.class, true, null, advice.pointcut().nestingGroup(),
-                advice.pointcut().suppressionKey());
+                advice.pointcut().suppressionKey(), stack);
         visitMethodInsn(INVOKESTATIC, advice.adviceType().getInternalName(),
                 onAfterAdvice.getName(), onAfterAdvice.getDescriptor(), false);
         if (onAfterBlockEnd != null) {

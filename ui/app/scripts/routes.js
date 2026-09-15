@@ -448,6 +448,14 @@ glowroot.config([
       templateUrl: 'views/jvm/capabilities.html',
       controller: 'JvmCapabilitiesCtrl'
     });
+    $stateProvider.state('nplusOne', {
+      url: '/nplus-one?agent-id&agent-rollup-id&transaction-type',
+      templateUrl: 'views/nplus-one.html',
+      controller: 'NplusOneCtrl',
+      resolve: {
+        waitForAgentRollup: onTransitionWithAgentRollup(true)
+      }
+    });
     $stateProvider.state('syntheticMonitors', {
       url: '/synthetic-monitors?agent-id&agent-rollup-id',
       templateUrl: 'views/synthetic-monitors.html',

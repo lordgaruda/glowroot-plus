@@ -653,6 +653,24 @@ public class Transaction {
         }
     }
 
+    void setAttribute(String name, @Nullable String value) {
+        synchronized (attributesLock) {
+            if (attributes == null) {
+                attributes = HashMultimap.create(ATTRIBUTE_KEYS_INITIAL_CAPACITY, 1);
+            }
+            attributes.removeAll(name);
+            attributes.put(name, Strings.nullToEmpty(value));
+        }
+    }
+
+    void removeAttribute(String name) {
+        synchronized (attributesLock) {
+            if (attributes != null) {
+                attributes.removeAll(name);
+            }
+        }
+    }
+
     void setError(@Nullable String message, @Nullable Throwable t) {
         if (this.errorMessage == null) {
             this.errorMessage = ErrorMessage.create(message, t, getThrowableFrameLimitCounter());

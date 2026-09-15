@@ -485,4 +485,62 @@ public class JdbcPluginIT {
             connection.getMetaData().getTables(null, null, null, null);
         }
     }
+
+    @Test
+    public void testNplusOneDetection() throws Exception {
+        container.getConfigService().setPluginProperty("jdbc", "rawExecutionThreshold", 8.0);
+        // when
+        Trace trace = container.execute(ExecuteNplusOneQueries.class);
+
+        // then
+        Trace.Header header = trace.getHeader();
+        List<Trace.Attribute> attributes = header.getAttributeList();
+
+        boolean foundNplusOne = false;
+        boolean foundDuplicate = false;
+        boolean foundRawExecute = false;
+
+        for (Trace.Attribute attribute : attributes) {
+            if (attribute.getName().equals("n-plus-one-detected") && attribute.getValueList().contains("true")) {
+                foundNplusOne = true;
+            }
+            if (attribute.getName().equals("duplicate-query-detected") && attribute.getValueList().contains("true")) {
+                foundDuplicate = true;
+            }
+            if (attribute.getName().equals("raw-execute-detected") && attribute.getValueList().contains("true")) {
+                foundRawExecute = true;
+            }
+        }
+
+        assertThat(foundNplusOne).isTrue();
+        assertThat(foundDuplicate).isTrue();
+        assertThat(foundRawExecute).isTrue();
+    }
+
+    public static class ExecuteNplusOneQueries implements AppUnderTest, TransactionMarker {
+        @Override
+        public void executeApp() throws Exception {
+            transactionMarker();
+        }
+        @Override
+        public void transactionMarker() throws Exception {
+            Connection connection = Connections.createConnection();
+            try {
+                // Trigger N+1 by running 6 normalized queries
+                for (int i = 0; i < 6; i++) {
+                    Statement statement = connection.createStatement();
+                    statement.execute("select * from employee where id = " + i);
+                    statement.close();
+                }
+                // Trigger duplicate by running exact same query 3 times
+                for (int i = 0; i < 3; i++) {
+                    Statement statement = connection.createStatement();
+                    statement.execute("select * from employee where id = 99");
+                    statement.close();
+                }
+            } finally {
+                Connections.closeConnection(connection);
+            }
+        }
+    }
 }

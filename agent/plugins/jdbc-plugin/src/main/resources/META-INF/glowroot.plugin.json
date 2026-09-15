@@ -90,11 +90,40 @@
       "description": "Capture trace entries for executions of DataSource.getConnection() and Connection.close()"
     },
     {
+      "name": "detectNplusOneQueries",
+      "type": "boolean",
+      "default": true,
+      "label": "N+1 query detection",
+      "checkboxLabel": "Detect N+1 query patterns",
+      "description": "Detect N+1 query patterns within a single transaction. When enabled, transactions with repeated similar queries will be tagged with n-plus-one attributes for analysis."
+    },
+    {
+      "name": "nplusOneThreshold",
+      "type": "double",
+      "default": 5.0,
+      "label": "N+1 threshold",
+      "description": "Minimum number of executions of the same normalized query within a single transaction to flag as an N+1 query pattern."
+    },
+    {
+      "name": "duplicateQueryThreshold",
+      "type": "double",
+      "default": 3.0,
+      "label": "Duplicate query threshold",
+      "description": "Minimum number of executions of the same exact query within a single transaction to flag as a duplicate query."
+    },
+    {
       "name": "stackTraceThresholdMillis",
       "type": "double",
       "default": 1000.0,
       "label": "Stack trace threshold (millis)",
       "description": "Any jdbc call that exceeds this threshold will have a stack trace captured and attached to it. An empty value will not collect any stack traces, a zero value will collect a stack trace for every jdbc call."
+    },
+    {
+      "name": "rawExecutionThreshold",
+      "type": "double",
+      "default": 10000.0,
+      "label": "Raw execution threshold",
+      "description": "Minimum number of raw JDBC query executions within a single transaction to flag as high raw execution for trace filtering."
     }
   ],
   "aspects": [
@@ -102,6 +131,7 @@
     "org.glowroot.agent.plugin.jdbc.ResultSetAspect",
     "org.glowroot.agent.plugin.jdbc.ConnectionAspect",
     "org.glowroot.agent.plugin.jdbc.DataSourceAspect",
-    "org.glowroot.agent.plugin.jdbc.ObjectPoolAspect"
+    "org.glowroot.agent.plugin.jdbc.ObjectPoolAspect",
+    "org.glowroot.agent.plugin.jdbc.NplusOneAnalysisAspect"
   ]
 }

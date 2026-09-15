@@ -245,7 +245,8 @@ public class TraceDao implements TraceRepository {
             List<ErrorMessagePoint> points =
                     dataSource.query(new ErrorPointQuery(query, filter, resolutionMillis));
             List<ErrorMessageCount> counts =
-                    dataSource.query(new ErrorMessageCountQuery(query, filter, limit + 1));
+                    dataSource.query(new ErrorMessageCountQuery(query, filter,
+                            limit == Integer.MAX_VALUE ? Integer.MAX_VALUE : limit + 1));
             // one extra record over the limit is fetched above to identify if the limit was hit
             return CompletableFuture.completedFuture(ImmutableErrorMessageResult.builder()
                     .addAllPoints(points)
