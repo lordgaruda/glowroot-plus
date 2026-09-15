@@ -801,6 +801,11 @@ public class Transaction {
     }
 
     void captureStackTrace(boolean auxiliary, ThreadInfo threadInfo) {
+        captureStackTrace(auxiliary, threadInfo.getStackTrace(), threadInfo.getThreadState());
+    }
+
+    void captureStackTrace(boolean auxiliary, StackTraceElement[] stackTrace,
+            Thread.State threadState) {
         if (completed) {
             return;
         }
@@ -819,7 +824,7 @@ public class Transaction {
             // transaction profile field, so that it is not possible to read a profile that doesn't
             // have at least one stack trace
             profile = new ThreadProfile(maxProfileSamples);
-            profile.addStackTrace(threadInfo);
+            profile.addStackTrace(stackTrace, threadState);
             if (auxiliary) {
                 auxThreadProfile = profile;
             } else {
@@ -827,7 +832,7 @@ public class Transaction {
             }
             return;
         }
-        profile.addStackTrace(threadInfo);
+        profile.addStackTrace(stackTrace, threadState);
     }
 
     void trackResourceAcquired(Object resource, boolean withLocationStackTrace) {

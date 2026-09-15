@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.glowroot</groupId>
         <artifactId>glowroot-parent</artifactId>
-        <version>0.14.8-beta.4-SNAPSHOT</version>
+        <version>0.14.8-beta.6-SNAPSHOT</version>
     </parent>
 
     <artifactId>glowroot-central</artifactId>
@@ -91,12 +91,12 @@
         <dependency>
             <groupId>org.infinispan</groupId>
             <artifactId>infinispan-core</artifactId>
-            <version>16.0.12</version>
+            <version>16.0.14</version>
         </dependency>
         <dependency>
             <groupId>org.infinispan</groupId>
             <artifactId>infinispan-component-annotations</artifactId>
-            <version>16.0.12</version>
+            <version>16.0.14</version>
             <scope>compile</scope>
         </dependency>
         <!-- jgroups-kubernetes specifies that it requires 4.2.x -->

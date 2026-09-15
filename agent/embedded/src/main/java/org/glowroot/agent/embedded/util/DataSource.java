@@ -48,6 +48,7 @@ import org.glowroot.agent.embedded.sql.DriverManager;
 import org.glowroot.agent.embedded.util.Schemas.Column;
 import org.glowroot.agent.embedded.util.Schemas.Index;
 import org.glowroot.common.util.OnlyUsedByTests;
+import org.glowroot.common2.config.H2CacheSize;
 import org.glowroot.common2.repo.ImmutableH2Table;
 import org.glowroot.common2.repo.RepoAdmin.H2Table;
 
@@ -59,11 +60,16 @@ public class DataSource {
 
     private static final Logger logger = LoggerFactory.getLogger(DataSource.class);
 
-    private static final int CACHE_SIZE =
-            Integer.getInteger("glowroot.internal.h2.cacheSize", 8192);
-
     private static final int QUERY_TIMEOUT_SECONDS =
             Integer.getInteger("glowroot.internal.h2.queryTimeout", 60);
+
+    // H2 2.x MVStore only. Glowroot default 30 (H2 stock default is 90) to cut background
+    // rewriteChunks CPU/IO on shared-JVM embeds (#1180). Override with
+    // -Dglowroot.internal.h2.autoCompactFillRate=N (90 = stock H2; 0 = disable auto-compact).
+    // WRITE_DELAY is PageStore-era; Hikari/multi-connection pool still deferred.
+    private static final int DEFAULT_AUTO_COMPACT_FILL_RATE = 30;
+    private static final int AUTO_COMPACT_FILL_RATE =
+            resolveAutoCompactFillRate(Integer.getInteger("glowroot.internal.h2.autoCompactFillRate"));
 
     // null means use memDb
     private final @Nullable File dbFile;
@@ -72,6 +78,8 @@ public class DataSource {
     @GuardedBy("lock")
     private Connection connection;
     private volatile boolean closed;
+    // H2 cache_size unit is KB; resolved via H2CacheSize (UI + optional system property)
+    private volatile int cacheSizeKb;
 
     @SuppressWarnings("nullness:type.argument.type.incompatible")
     private final ThreadLocal<Boolean> suppressQueryTimeout = new ThreadLocal<Boolean>() {
@@ -99,16 +107,43 @@ public class DataSource {
     // creates an in-memory database
     public DataSource() throws SQLException {
         dbFile = null;
-        connection = createConnection(null);
+        cacheSizeKb = resolveInitialCacheSizeKb();
+        connection = createConnection(null, cacheSizeKb);
         shutdownHookThread = new ShutdownHookThread();
         Runtime.getRuntime().addShutdownHook(shutdownHookThread);
     }
 
     public DataSource(File dbFile) throws SQLException {
         this.dbFile = dbFile;
-        connection = createConnection(dbFile);
+        cacheSizeKb = resolveInitialCacheSizeKb();
+        connection = createConnection(dbFile, cacheSizeKb);
         shutdownHookThread = new ShutdownHookThread();
         Runtime.getRuntime().addShutdownHook(shutdownHookThread);
+    }
+
+    public int getCacheSizeKb() {
+        return cacheSizeKb;
+    }
+
+    /**
+     * Apply H2 cache size (KB). No-op when unchanged. Uses {@code SET CACHE_SIZE} on the open
+     * connection so operators do not need a JVM restart after Admin → Storage save.
+     */
+    public void setCacheSizeKb(int cacheSizeKb) throws SQLException {
+        if (cacheSizeKb <= 0) {
+            return;
+        }
+        synchronized (lock) {
+            if (closed) {
+                return;
+            }
+            if (this.cacheSizeKb == cacheSizeKb) {
+                return;
+            }
+            checkConnectionUnderLock();
+            execute("SET CACHE_SIZE " + cacheSizeKb);
+            this.cacheSizeKb = cacheSizeKb;
+        }
     }
 
     public void defrag() throws SQLException {
@@ -121,7 +156,7 @@ public class DataSource {
             }
             checkConnectionUnderLock();
             execute("shutdown compact");
-            connection = createConnection(dbFile);
+            connection = createConnection(dbFile, cacheSizeKb);
             preparedStatementCache.invalidateAll();
         }
     }
@@ -136,7 +171,7 @@ public class DataSource {
             }
             checkConnectionUnderLock();
             execute("shutdown compact");
-            connection = createConnection(dbFile);
+            connection = createConnection(dbFile, cacheSizeKb);
             preparedStatementCache.invalidateAll();
         }
     }
@@ -169,7 +204,7 @@ public class DataSource {
             if (!dbFile.delete()) {
                 throw new SQLException("Could not delete file: " + dbFile.getAbsolutePath());
             }
-            connection = createConnection(dbFile);
+            connection = createConnection(dbFile, cacheSizeKb);
             preparedStatementCache.invalidateAll();
             for (Map.Entry</*@Untainted*/ String, ImmutableList<Column>> entry : tables
                     .entrySet()) {
@@ -521,7 +556,7 @@ public class DataSource {
     private void checkConnectionUnderLock() throws SQLException {
         if (connection.isClosed()) {
             // connection was closed internally (e.g. due to OutOfMemoryError)
-            connection = createConnection(dbFile);
+            connection = createConnection(dbFile, cacheSizeKb);
             preparedStatementCache.invalidateAll();
         }
     }
@@ -607,7 +642,13 @@ public class DataSource {
         }
     }
 
-    private static Connection createConnection(@Nullable File dbFile) throws SQLException {
+    private static int resolveInitialCacheSizeKb() {
+        return H2CacheSize.resolveKb(H2CacheSize.MODE_FIXED, H2CacheSize.DEFAULT_MB,
+                Runtime.getRuntime().maxMemory(), System.getProperty(H2CacheSize.SYSTEM_PROPERTY));
+    }
+
+    private static Connection createConnection(@Nullable File dbFile, int cacheSizeKb)
+            throws SQLException {
         // NON_KEYWORDS=USER,VALUE allows using "user" and "value" as column names which are
         // reserved keywords in H2 2.x but were not reserved in H2 1.x
         if (dbFile == null) {
@@ -622,11 +663,25 @@ public class DataSource {
             props.setProperty("user", "sa");
             props.setProperty("password", "");
             // db_close_on_exit=false since jvm shutdown hook is handled by DataSource
-            String url = "jdbc:h2:" + dbPath
-                    + ";compress=true;db_close_on_exit=false;cache_size=" + CACHE_SIZE
-                    + ";NON_KEYWORDS=USER,VALUE";
-            return DriverManager.getConnection(url, props);
+            return DriverManager.getConnection(
+                    buildFileUrl(dbPath, cacheSizeKb, AUTO_COMPACT_FILL_RATE), props);
         }
+    }
+
+    /**
+     * File-backed H2 JDBC URL. Always sets {@code AUTO_COMPACT_FILL_RATE} (Glowroot default 30).
+     */
+    @VisibleForTesting
+    static String buildFileUrl(String dbPath, int cacheSizeKb, int autoCompactFillRate) {
+        return "jdbc:h2:" + dbPath
+                + ";compress=true;db_close_on_exit=false;cache_size=" + cacheSizeKb
+                + ";NON_KEYWORDS=USER,VALUE"
+                + ";AUTO_COMPACT_FILL_RATE=" + autoCompactFillRate;
+    }
+
+    @VisibleForTesting
+    static int resolveAutoCompactFillRate(@Nullable Integer override) {
+        return override != null ? override : DEFAULT_AUTO_COMPACT_FILL_RATE;
     }
 
     private static <T> T extractAndClose(ResultSet resultSet, ResultSetExtractor<T> rse)

@@ -515,8 +515,9 @@ class LayoutService {
         abstract ConfigPermissions config();
 
         boolean hasSomeAccess() {
+            // include every agent permission family exposed on AgentRollupLayout
             return transaction().hasSomeAccess() || error().hasSomeAccess() || jvm().hasSomeAccess()
-                    || config().view();
+                    || syntheticMonitor() || incident() || config().view();
         }
     }
 
