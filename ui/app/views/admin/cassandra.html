@@ -1,0 +1,388 @@
+<!--
+  Copyright 2026 the original author or authors.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h2>Cassandra DB Stats &amp; Trace Storage</h2>
+    <div>
+      <button type="button"
+              class="btn btn-sm btn-outline-secondary"
+              ng-click="refreshStats()"
+              ng-disabled="loading">
+        <span class="fas fa-sync" ng-class="{'fa-spin': loading}"></span> Refresh Stats
+      </button>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div ng-include src="'template/gt-loading-overlay.html'"></div>
+    <div ng-include src="'template/gt-http-error-overlay.html'"></div>
+
+    <div ng-if="loaded">
+      <!-- Cluster & Keyspace Summary Tiles -->
+      <div class="row mb-4">
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card bg-light border-secondary">
+            <div class="card-body py-2 px-3">
+              <div class="text-muted small">Cluster / Version</div>
+              <div class="font-weight-bold text-truncate" title="{{stats.clusterName}}">
+                {{stats.clusterName}}
+              </div>
+              <span class="badge badge-info mt-1">{{stats.releaseVersion}}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card bg-light border-secondary">
+            <div class="card-body py-2 px-3">
+              <div class="text-muted small">Keyspace / Nodes</div>
+              <div class="font-weight-bold text-truncate" title="{{stats.keyspaceName}}">
+                {{stats.keyspaceName}}
+              </div>
+              <span class="badge badge-secondary mt-1">{{stats.nodes.length}} nodes</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card bg-light border-secondary">
+            <div class="card-body py-2 px-3">
+              <div class="text-muted small">Total Estimated Storage</div>
+              <div class="font-weight-bold text-primary h5 mb-0">
+                {{stats.totalEstimatedBytes | gtBytes}}
+              </div>
+              <div class="text-muted small mt-1">{{stats.tables.length}} tables</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card bg-light border-secondary">
+            <div class="card-body py-2 px-3">
+              <div class="text-muted small">Total Estimated Partitions</div>
+              <div class="font-weight-bold h5 mb-0">
+                {{stats.totalEstimatedPartitions | number}}
+              </div>
+              <div class="text-muted small mt-1">across cluster rings</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Storage Breakdown Bar -->
+      <div class="card mb-4">
+        <div class="card-header py-2 font-weight-bold">
+          Storage Distribution by Category
+        </div>
+        <div class="card-body py-3">
+          <div style="height: 1.5rem; display: flex; overflow: hidden; border-radius: 4px; border: 1px solid #adb5bd;">
+            <div ng-style="{'width': tracePct + '%', 'background': '#dc3545'}"
+                 title="Traces: {{traceBytes | gtBytes}} ({{tracePct}}%)"></div>
+            <div ng-style="{'width': aggregatePct + '%', 'background': '#007bff'}"
+                 title="Aggregates: {{aggregateBytes | gtBytes}} ({{aggregatePct}}%)"></div>
+            <div ng-style="{'width': gaugePct + '%', 'background': '#28a745'}"
+                 title="Gauges: {{gaugeBytes | gtBytes}} ({{gaugePct}}%)"></div>
+            <div style="flex-grow: 1; background: #6c757d;"
+                 title="System / Other: {{otherBytes | gtBytes}}"></div>
+          </div>
+          <div class="d-flex flex-wrap mt-2 small">
+            <div class="mr-4">
+              <span class="badge" style="background: #dc3545; color: white;">■</span>
+              <strong>Traces:</strong> {{traceBytes | gtBytes}} ({{tracePct}}%)
+            </div>
+            <div class="mr-4">
+              <span class="badge" style="background: #007bff; color: white;">■</span>
+              <strong>Aggregates:</strong> {{aggregateBytes | gtBytes}} ({{aggregatePct}}%)
+            </div>
+            <div class="mr-4">
+              <span class="badge" style="background: #28a745; color: white;">■</span>
+              <strong>Gauges:</strong> {{gaugeBytes | gtBytes}} ({{gaugePct}}%)
+            </div>
+            <div>
+              <span class="badge" style="background: #6c757d; color: white;">■</span>
+              <strong>System / Other:</strong> {{otherBytes | gtBytes}}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Operation Progress Status -->
+      <div class="card mb-4"
+           ng-if="pruneStatus && (pruneStatus.running || pruneStatus.action !== 'None')"
+           ng-class="{'border-warning': pruneStatus.running, 'border-success': !pruneStatus.running && !pruneStatus.lastError, 'border-danger': pruneStatus.lastError}">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center"
+             ng-class="{'bg-warning text-dark': pruneStatus.running, 'bg-light': !pruneStatus.running}">
+          <span>
+            <span class="fas fa-tasks mr-1"></span>
+            <strong>Operation Status:</strong> {{pruneStatus.action}}
+          </span>
+          <span class="badge"
+                ng-class="{'badge-primary': pruneStatus.running, 'badge-success': !pruneStatus.running && !pruneStatus.lastError, 'badge-danger': pruneStatus.lastError}">
+            {{pruneStatus.running ? 'Running...' : (pruneStatus.lastError ? 'Failed' : 'Completed')}}
+          </span>
+        </div>
+        <div class="card-body py-2">
+          <div class="row align-items-center">
+            <div class="col-md-8">
+              <div><strong>Current Step:</strong> {{pruneStatus.currentStep}}</div>
+              <div class="text-muted small mt-1" ng-if="pruneStatus.deletedCount > 0">
+                Deleted count: <strong>{{pruneStatus.deletedCount | number}}</strong>
+                <span ng-if="pruneStatus.errorCount > 0" class="text-danger ml-2">
+                  (Errors: {{pruneStatus.errorCount | number}})
+                </span>
+              </div>
+              <div ng-if="pruneStatus.lastError" class="text-danger small mt-1">
+                <strong>Error:</strong> {{pruneStatus.lastError}}
+              </div>
+            </div>
+            <div class="col-md-4 text-right" ng-if="pruneStatus.running">
+              <div gt-button
+                   gt-label="Cancel Operation"
+                   gt-click="cancelTracePruning(deferred)"
+                   gt-btn-class="btn-sm btn-outline-danger"
+                   gt-dont-validate-form="true">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trace Storage Management Actions (Admin Role Only) -->
+      <div class="row mb-4" ng-if="layout.adminEdit">
+        <!-- Quick Free: Truncate All Traces -->
+        <div class="col-lg-6 mb-3">
+          <div class="card h-100 border-danger">
+            <div class="card-header bg-danger text-white py-2 font-weight-bold">
+              <span class="fas fa-bolt mr-1"></span> Quick Storage Free (Instant Truncate)
+            </div>
+            <div class="card-body d-flex flex-column justify-content-between">
+              <p class="card-text text-muted small">
+                Instantly truncates all <strong>26 Cassandra trace tables</strong> (headers, entries, queries, profile blobs, and point indexes).
+                Reclaims 100% of trace disk space across replicas immediately without tombstone accumulation.
+                <br><br>
+                <strong class="text-danger">Note:</strong> Historical aggregates (response-time graphs, throughput) and gauge metrics are preserved.
+              </p>
+              <div class="mt-3">
+                <div gt-button
+                     gt-label="Truncate all trace tables (Quick Free)"
+                     gt-click="truncateAllTraces(deferred)"
+                     gt-btn-class="btn-danger"
+                     gt-dont-validate-form="true"
+                     gt-confirm-header="Truncate all trace tables?"
+                     gt-confirm-body="WARNING: This will immediately DROP all stored trace data (detailed transactions, error messages, queries, thread profiles) across the entire Cassandra cluster to free disk space instantly. Aggregates and gauges will NOT be affected. This cannot be undone."
+                     gt-disabled="pruneStatus.running"
+                     class="d-inline-block">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Prune by Age: Remove Traces by Days -->
+        <div class="col-lg-6 mb-3">
+          <div class="card h-100 border-warning">
+            <div class="card-header bg-warning text-dark py-2 font-weight-bold">
+              <span class="fas fa-calendar-times mr-1"></span> Prune Traces by Age
+            </div>
+            <div class="card-body d-flex flex-column justify-content-between">
+              <p class="card-text text-muted small">
+                Asynchronously scans and removes trace details and point records older than the specified age in days. Runs in the background without blocking UI requests.
+              </p>
+
+              <div>
+                <div class="form-group mb-2">
+                  <label class="small font-weight-bold mb-1">Quick Select Retention Cutoff:</label>
+                  <div class="btn-group btn-group-sm d-flex" role="group">
+                    <button type="button" class="btn btn-outline-secondary" ng-class="{'active': pruneForm.days === 1}" ng-click="setPruneDays(1)">1 Day</button>
+                    <button type="button" class="btn btn-outline-secondary" ng-class="{'active': pruneForm.days === 3}" ng-click="setPruneDays(3)">3 Days</button>
+                    <button type="button" class="btn btn-outline-secondary" ng-class="{'active': pruneForm.days === 7}" ng-click="setPruneDays(7)">7 Days</button>
+                    <button type="button" class="btn btn-outline-secondary" ng-class="{'active': pruneForm.days === 14}" ng-click="setPruneDays(14)">14 Days</button>
+                    <button type="button" class="btn btn-outline-secondary" ng-class="{'active': pruneForm.days === 30}" ng-click="setPruneDays(30)">30 Days</button>
+                  </div>
+                </div>
+
+                <div class="form-row align-items-center mb-2">
+                  <div class="col-auto">
+                    <label class="small font-weight-bold mb-0">Custom Days:</label>
+                  </div>
+                  <div class="col-3">
+                    <input type="number" min="0" class="form-control form-control-sm" ng-model="pruneForm.days">
+                  </div>
+                  <div class="col-auto">
+                    <span class="small text-muted">days older than now</span>
+                  </div>
+                </div>
+
+                <div class="form-check mb-3">
+                  <input type="checkbox" class="form-check-input" id="updateRetentionPolicyCheck" ng-model="pruneForm.updateRetentionPolicy">
+                  <label class="form-check-label small" for="updateRetentionPolicyCheck">
+                    Also align Central Storage retention config (<code>traceExpirationHours</code>) and TWCS compaction windows
+                  </label>
+                </div>
+
+                <div gt-button
+                     gt-label="Prune traces older than {{pruneForm.days}} days"
+                     gt-click="pruneTracesByDays(deferred)"
+                     gt-btn-class="btn-warning"
+                     gt-dont-validate-form="true"
+                     gt-confirm-header="Prune traces older than {{pruneForm.days}} days?"
+                     gt-confirm-body="This will run in the background to delete traces older than {{pruneForm.days}} days. You can monitor progress in the status panel above."
+                     gt-disabled="pruneStatus.running || pruneForm.days < 0"
+                     class="d-inline-block">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cassandra Tables Breakdown -->
+      <div class="card mb-4">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <span class="font-weight-bold">Cassandra Table Statistics ({{(stats.tables | filter:tableFilter).length}} of {{stats.tables.length}} tables)</span>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    ng-repeat="cat in categories"
+                    ng-class="{'active': categoryFilter === cat}"
+                    ng-click="filterByCategory(cat)">
+              {{cat}}
+            </button>
+          </div>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="thead-light">
+              <tr>
+                <th ng-click="sortBy('tableName')" style="cursor: pointer;">
+                  Table Name
+                  <span class="fas fa-sort" ng-if="sortField !== 'tableName'"></span>
+                  <span class="fas" ng-class="sortReverse ? 'fa-sort-up' : 'fa-sort-down'" ng-if="sortField === 'tableName'"></span>
+                </th>
+                <th ng-click="sortBy('category')" style="cursor: pointer;">
+                  Category
+                  <span class="fas fa-sort" ng-if="sortField !== 'category'"></span>
+                  <span class="fas" ng-class="sortReverse ? 'fa-sort-up' : 'fa-sort-down'" ng-if="sortField === 'category'"></span>
+                </th>
+                <th>Compaction</th>
+                <th ng-click="sortBy('estimatedBytes')" style="cursor: pointer;" class="text-right">
+                  Estimated Size
+                  <span class="fas fa-sort" ng-if="sortField !== 'estimatedBytes'"></span>
+                  <span class="fas" ng-class="sortReverse ? 'fa-sort-down' : 'fa-sort-up'" ng-if="sortField === 'estimatedBytes'"></span>
+                </th>
+                <th class="text-right" style="width: 120px;">% Storage</th>
+                <th ng-click="sortBy('estimatedPartitions')" style="cursor: pointer;" class="text-right">
+                  Partitions
+                  <span class="fas fa-sort" ng-if="sortField !== 'estimatedPartitions'"></span>
+                  <span class="fas" ng-class="sortReverse ? 'fa-sort-down' : 'fa-sort-up'" ng-if="sortField === 'estimatedPartitions'"></span>
+                </th>
+                <th class="text-right">Default TTL</th>
+                <th ng-click="sortBy('recentBytesWritten')" style="cursor: pointer;" class="text-right">
+                  Recent Writes
+                  <span class="fas fa-sort" ng-if="sortField !== 'recentBytesWritten'"></span>
+                  <span class="fas" ng-class="sortReverse ? 'fa-sort-down' : 'fa-sort-up'" ng-if="sortField === 'recentBytesWritten'"></span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="table in stats.tables | filter:tableFilter | orderBy:sortField:sortReverse">
+                <td>
+                  <code class="text-dark">{{table.tableName}}</code>
+                </td>
+                <td>
+                  <span class="badge"
+                        ng-class="{
+                          'badge-danger': table.category === 'Trace',
+                          'badge-primary': table.category === 'Aggregate',
+                          'badge-success': table.category === 'Gauge',
+                          'badge-info': table.category === 'Synthetic',
+                          'badge-secondary': table.category === 'System / Config' || table.category === 'Other'
+                        }">
+                    {{table.category}}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge badge-light border">{{table.compactionStrategy}}</span>
+                </td>
+                <td class="text-right font-weight-bold">
+                  {{table.estimatedBytes | gtBytes}}
+                </td>
+                <td class="text-right">
+                  <div class="d-flex align-items-center justify-content-end">
+                    <span class="small mr-2">{{(100 * table.estimatedBytes / (stats.totalEstimatedBytes || 1)).toFixed(1)}}%</span>
+                    <div style="width: 45px; height: 6px; background: #e9ecef; border-radius: 3px; overflow: hidden;">
+                      <div ng-style="{'width': Math.min(100, 100 * table.estimatedBytes / (stats.totalEstimatedBytes || 1)) + '%', 'background': table.category === 'Trace' ? '#dc3545' : '#007bff'}" style="height: 100%;"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="text-right">
+                  {{table.estimatedPartitions | number}}
+                </td>
+                <td class="text-right text-muted small">
+                  {{table.defaultTtlSeconds > 0 ? (table.defaultTtlSeconds / 86400).toFixed(0) + ' d' : 'None'}}
+                </td>
+                <td class="text-right small">
+                  <span ng-if="table.recentBytesWritten > 0">
+                    {{table.recentBytesWritten | gtBytes}} ({{table.recentRowsWritten | number}} rows)
+                  </span>
+                  <span ng-if="table.recentBytesWritten === 0" class="text-muted">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cassandra Cluster Nodes Table -->
+      <div class="card mb-4">
+        <div class="card-header py-2 font-weight-bold">
+          Cassandra Cluster Nodes ({{stats.nodes.length}})
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="thead-light">
+              <tr>
+                <th>Endpoint / Host</th>
+                <th>Status</th>
+                <th>Datacenter</th>
+                <th>Rack</th>
+                <th>Release Version</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="node in stats.nodes">
+                <td>
+                  <span class="fas fa-server mr-1 text-secondary"></span>
+                  <code>{{node.endpoint}}</code>
+                </td>
+                <td>
+                  <span class="badge" ng-class="node.status === 'UP' ? 'badge-success' : 'badge-danger'">
+                    {{node.status}}
+                  </span>
+                </td>
+                <td>{{node.datacenter}}</td>
+                <td>{{node.rack}}</td>
+                <td><span class="badge badge-info">{{node.releaseVersion}}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+

@@ -616,6 +616,11 @@ glowroot.config([
       templateUrl: 'views/admin/storage.html',
       controller: 'AdminStorageCtrl'
     });
+    $stateProvider.state('admin.cassandra', {
+      url: '/cassandra',
+      templateUrl: 'views/admin/cassandra.html',
+      controller: 'AdminCassandraCtrl'
+    });
     $stateProvider.state('admin.smtp', {
       url: '/smtp',
       templateUrl: 'views/admin/smtp.html',

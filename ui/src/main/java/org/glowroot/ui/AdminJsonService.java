@@ -675,6 +675,34 @@ class AdminJsonService {
         return Integer.toString(repoAdmin.updateCassandraTwcsWindowSizes());
     }
 
+    @GET(path = "/backend/admin/cassandra-db-stats", permission = "admin:view:storage")
+    String getCassandraDbStats() throws Exception {
+        return mapper.writeValueAsString(repoAdmin.getCassandraDbStats());
+    }
+
+    @POST(path = "/backend/admin/truncate-all-traces", permission = "admin:edit:storage")
+    String truncateAllTraces() throws Exception {
+        int count = repoAdmin.truncateAllTraces();
+        return "{\"truncatedCount\":" + count + "}";
+    }
+
+    @POST(path = "/backend/admin/prune-traces-by-days", permission = "admin:edit:storage")
+    String pruneTracesByDays(@BindRequest PruneTracesRequest request) throws Exception {
+        repoAdmin.pruneTracesOlderThan(request.days(), request.updateRetentionPolicy());
+        return "{\"status\":\"started\"}";
+    }
+
+    @GET(path = "/backend/admin/trace-prune-status", permission = "admin:view:storage")
+    String getTracePruneStatus() throws Exception {
+        return mapper.writeValueAsString(repoAdmin.getTracePruneStatus());
+    }
+
+    @POST(path = "/backend/admin/cancel-trace-prune", permission = "admin:edit:storage")
+    String cancelTracePruning() {
+        repoAdmin.cancelTracePruning();
+        return "{\"status\":\"cancelling\"}";
+    }
+
     @GET(path = "/backend/admin/cassandra-write-totals", permission = "admin:view:storage")
     String getCassandraWriteTotals(@BindRequest CassandraWriteTotalsRequest request)
             throws JsonProcessingException {
@@ -845,6 +873,12 @@ class AdminJsonService {
         @Nullable
         String transactionType();
         int limit();
+    }
+
+    @Value.Immutable
+    interface PruneTracesRequest {
+        int days();
+        boolean updateRetentionPolicy();
     }
 
     @Value.Immutable

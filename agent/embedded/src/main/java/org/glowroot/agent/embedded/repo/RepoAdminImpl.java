@@ -32,6 +32,8 @@ import org.glowroot.common.util.Clock;
 import org.glowroot.common2.config.EmbeddedStorageConfig;
 import org.glowroot.common2.config.H2CacheSize;
 import org.glowroot.common2.repo.*;
+import org.glowroot.common2.repo.RepoAdmin.CassandraDbStats;
+import org.glowroot.common2.repo.RepoAdmin.TracePruneStatus;
 import org.glowroot.wire.api.model.CollectorServiceOuterClass.InitMessage.Environment;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -150,6 +152,31 @@ class RepoAdminImpl implements RepoAdmin {
 
     @Override
     public int updateCassandraTwcsWindowSizes() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CassandraDbStats getCassandraDbStats() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int truncateAllTraces() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void pruneTracesOlderThan(int days, boolean updateRetentionPolicy) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public TracePruneStatus getTracePruneStatus() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void cancelTracePruning() {
         throw new UnsupportedOperationException();
     }
 
