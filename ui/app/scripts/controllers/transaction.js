@@ -87,7 +87,7 @@ glowroot.controller('TransactionCtrl', [
         query['transaction-type'] = transactionType;
       }
       if ($scope.range.last) {
-        if ($scope.range.last !== 4 * 60 * 60 * 1000) {
+        if ($scope.range.last !== 15 * 60 * 1000) {
           query.last = $scope.range.last;
         }
       } else {
@@ -114,7 +114,7 @@ glowroot.controller('TransactionCtrl', [
       if (!isNaN($scope.range.chartFrom) && !isNaN($scope.range.chartTo)) {
         $scope.range.last = 0;
       } else if (!$scope.range.last) {
-        $scope.range.last = 4 * 60 * 60 * 1000;
+        $scope.range.last = 15 * 60 * 1000;
       }
       $scope.summarySortOrder = $location.search()['summary-sort-order'] || $scope.defaultSummarySortOrder;
 
@@ -182,7 +182,7 @@ glowroot.controller('TransactionCtrl', [
           query.to = Math.ceil($scope.range.chartTo / 60000) * 60000;
         }
         delete query.last;
-      } else if (last !== 4 * 60 * 60 * 1000) {
+      } else if (last !== 15 * 60 * 1000) {
         query.last = last;
         delete query.from;
         delete query.to;

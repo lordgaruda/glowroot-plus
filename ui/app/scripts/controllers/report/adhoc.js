@@ -302,10 +302,10 @@ glowroot.controller('ReportAdhocCtrl', [
         appliedReport.fromDate = moment(appliedReport.fromDate).valueOf();
         appliedReport.toDate = moment(appliedReport.toDate).valueOf();
       } else {
-        // match the default time period of "last 4 hours" used on other pages
-        // (partly because when viewing last 4 hours on another page, there is no criteria in the query and so it
+        // match the default time period of "last 15 minutes" used on other pages
+        // (partly because when viewing last 15 minutes on another page, there is no criteria in the query and so it
         // doesn't get passed over when clicking on the Report header link)
-        appliedReport.fromDate = moment().subtract(4, 'hours').startOf('day').valueOf();
+        appliedReport.fromDate = moment().subtract(15, 'minutes').startOf('day').valueOf();
         appliedReport.toDate = moment().startOf('day').valueOf();
       }
       appliedReport.rollup = $location.search().rollup || 'daily';
