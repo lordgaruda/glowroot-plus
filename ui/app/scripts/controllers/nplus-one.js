@@ -237,5 +237,39 @@ glowroot.controller('NplusOneCtrl', [
       refreshTopLevelAgentRollups();
       refreshChildAgentRollups();
     }
+
+    $scope.exportAsCsv = function () {
+      if (!$scope.summary || !$scope.summary.transactions || !$scope.summary.transactions.length) {
+        return;
+      }
+      var csv = 'Transaction Name,Detections Count,Avg Duration (ms),Last Detected\r\n';
+      angular.forEach($scope.summary.transactions, function (txn) {
+        var name = txn.transactionName || '';
+        if (name.indexOf(',') !== -1 || name.indexOf('"') !== -1 || name.indexOf('\n') !== -1) {
+          name = '"' + name.replace(/"/g, '""') + '"';
+        }
+        var count = txn.occurrenceCount || 0;
+        var avgDurationMs = (txn.avgDurationNanos / 1000000).toFixed(1);
+        var lastDetected = txn.lastOccurrence ? moment(txn.lastOccurrence).format('YYYY-MM-DD HH:mm:ss') : '';
+        csv += name + ',' + count + ',' + avgDurationMs + ',' + lastDetected + '\r\n';
+      });
+      var filename = 'nplus-one-offenders.csv';
+      var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+      } else {
+        var link = document.createElement('a');
+        if (link.download !== undefined) {
+          var url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', filename);
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      }
+    };
   }
 ]);

@@ -491,29 +491,77 @@ glowroot.controller('ReportAdhocCtrl', [
       refreshData(deferred);
     };
 
+    function escapeCsv(val) {
+      if (val === undefined || val === null) {
+        return '';
+      }
+      var str = String(val);
+      if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1 || str.indexOf('\r') !== -1) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      var blob = new Blob(['\uFEFF' + content], { type: (mimeType || 'text/csv;charset=utf-8;') });
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+      } else {
+        var link = document.createElement('a');
+        if (link.download !== undefined) {
+          var url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', filename);
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } else {
+          var csvWindow = window.open();
+          $(csvWindow.document.body).text(content);
+        }
+      }
+    }
+
     $scope.exportAsCsv = function () {
-      var csv = '<strong>';
+      var csv = '';
       if ($scope.layout.central) {
         csv += 'Agent,';
       }
       angular.forEach($scope.allXvals, function (xval) {
-        csv += $scope.exportColumnHeader(xval) + ',';
+        csv += escapeCsv($scope.exportColumnHeader(xval)) + ',';
       });
-      csv += 'Overall</strong><br>';
+      csv += 'Overall\r\n';
+
       angular.forEach($scope.tableRows, function (tableRow) {
         if ($scope.layout.central) {
-          csv += tableRow.label + ',';
+          csv += escapeCsv(tableRow.label) + ',';
         }
         angular.forEach($scope.allXvals, function (xval) {
-          if (tableRow[xval] !== Number.NEGATIVE_INFINITY) {
-            csv += tableRow[xval];
+          if (tableRow[xval] !== undefined && tableRow[xval] !== Number.NEGATIVE_INFINITY) {
+            csv += escapeCsv(tableRow[xval]);
           }
           csv += ',';
         });
-        csv += tableRow.overall + '\n';
+        if (tableRow.overall !== undefined && tableRow.overall !== Number.NEGATIVE_INFINITY) {
+          csv += escapeCsv(tableRow.overall);
+        }
+        csv += '\r\n';
       });
-      var csvWindow = window.open();
-      $(csvWindow.document.body).html('<pre style="white-space: pre-wrap;">' + csv + '</pre>');
+
+      var metricSlug = (appliedReport && appliedReport.metric ? appliedReport.metric : ($scope.report.metric || 'report'))
+          .replace(/^transaction:/, '')
+          .replace(/^error:/, 'error-')
+          .replace(/^gauge:/, 'gauge-')
+          .replace(/[^a-zA-Z0-9_-]/g, '-');
+      var filename = 'adhoc-' + metricSlug;
+      if (appliedReport && appliedReport.fromDate && appliedReport.toDate) {
+        filename += '-' + moment(appliedReport.fromDate).format('YYYYMMDD') + '-' + moment(appliedReport.toDate).format('YYYYMMDD');
+      }
+      filename += '.csv';
+
+      downloadFile(csv, filename);
     };
 
     function updateYvalMap(label, points) {
@@ -639,6 +687,10 @@ glowroot.controller('ReportAdhocCtrl', [
                 plot.getAxes().yaxis.options.label = 'milliseconds';
               } else if (query.metric === 'error:rate') {
                 plot.getAxes().yaxis.options.label = 'percent';
+              } else if (query.metric === 'transaction:count' || query.metric === 'error:count'
+                  || query.metric === 'transaction:n-plus-one-count'
+                  || query.metric === 'transaction:duplicate-query-count') {
+                plot.getAxes().yaxis.options.label = 'count';
               } else if (query.metric.indexOf('gauge:') === 0) {
                 var gaugeName = query.metric.substring('gauge:'.length);
                 var gaugeUnit = gaugeUnits[gaugeName];
@@ -787,8 +839,14 @@ glowroot.controller('ReportAdhocCtrl', [
         path = 'error/messages';
       } else if (appliedReport.metric === 'error:count') {
         path = 'error/messages';
-      } else if (appliedReport.metric === 'transaction:n-plus-one-count' || appliedReport.metric === 'transaction:duplicate-query-count') {
-        path = 'nplus-one';
+      } else if (appliedReport.metric === 'transaction:n-plus-one-count') {
+        if (appliedReport.transactionName) {
+          path = 'transaction/traces';
+        } else {
+          path = 'nplus-one';
+        }
+      } else if (appliedReport.metric === 'transaction:duplicate-query-count') {
+        path = 'transaction/traces';
       } else if (appliedReport.metric.indexOf('gauge:') === 0) {
         path = 'jvm/gauges';
       }
@@ -806,6 +864,11 @@ glowroot.controller('ReportAdhocCtrl', [
         }
       } else if (appliedReport.metric.indexOf('gauge:') === 0) {
         url += '&gauge-name=' + encodeURIComponent(appliedReport.metric.substring('gauge:'.length));
+      }
+      if (appliedReport.metric === 'transaction:n-plus-one-count' && path === 'transaction/traces') {
+        url += '&attribute-name=n-plus-one-detected&attribute-value-comparator=EQUALS&attribute-value=true';
+      } else if (appliedReport.metric === 'transaction:duplicate-query-count') {
+        url += '&attribute-name=duplicate-query-detected&attribute-value-comparator=EQUALS&attribute-value=true';
       }
       url += '&from=' + from + '&to=' + to;
       if (appliedReport.metric === 'transaction:x-percentile') {

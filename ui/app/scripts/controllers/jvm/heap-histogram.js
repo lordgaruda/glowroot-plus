@@ -190,16 +190,40 @@ glowroot.controller('JvmHeapHistogramCtrl', [
           });
     };
 
+    function downloadFile(content, filename, mimeType) {
+      var blob = new Blob(['\uFEFF' + content], { type: (mimeType || 'text/csv;charset=utf-8;') });
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+      } else {
+        var link = document.createElement('a');
+        if (link.download !== undefined) {
+          var url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', filename);
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } else {
+          var csvWindow = window.open();
+          $(csvWindow.document.body).text(content);
+        }
+      }
+    }
+
     $scope.exportAsCsv = function () {
-      var csv = '<strong>Class name,Bytes,Count</strong><br>';
+      var csv = 'Class name,Bytes,Count\r\n';
       angular.forEach($scope.histogram.items, function (item) {
         if (matchesFilter(item.className)) {
-          // limit is not applied during export
-          csv += item.className + ',' + item.bytes + ',' + item.count + '<br>';
+          var className = item.className || '';
+          if (className.indexOf(',') !== -1 || className.indexOf('"') !== -1 || className.indexOf('\n') !== -1) {
+            className = '"' + className.replace(/"/g, '""') + '"';
+          }
+          csv += className + ',' + item.bytes + ',' + item.count + '\r\n';
         }
       });
-      var csvWindow = window.open();
-      $(csvWindow.document.body).html('<pre style="white-space: pre-wrap;">' + csv + '</pre>');
+      downloadFile(csv, 'heap-histogram.csv');
     };
 
     $scope.smallScreen = function () {
