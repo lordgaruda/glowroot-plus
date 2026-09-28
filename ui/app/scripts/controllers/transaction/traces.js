@@ -227,6 +227,7 @@ glowroot.controller('TracesCtrl', [
       $scope.filter.attributeName = '';
       $scope.filter.attributeValueComparator = 'begins';
       $scope.filter.attributeValue = '';
+      $scope.filter.ignoreStreaming = true;
       $scope.filter.limit = defaultFilterLimit;
       $scope.refresh();
     };
@@ -447,6 +448,7 @@ glowroot.controller('TracesCtrl', [
       } else {
         appliedFilter.attributeValue = rawAttrVal || '';
       }
+      appliedFilter.ignoreStreaming = $location.search()['ignore-streaming'] !== 'false';
       appliedFilter.limit = Number($location.search().limit) || defaultFilterLimit;
 
       if (priorAppliedFilter !== undefined && !angular.equals(appliedFilter, priorAppliedFilter)) {
@@ -534,6 +536,9 @@ glowroot.controller('TracesCtrl', [
       }
       if (Number(appliedFilter.limit) !== defaultFilterLimit) {
         query.limit = appliedFilter.limit;
+      }
+      if (!appliedFilter.ignoreStreaming) {
+        query['ignore-streaming'] = 'false';
       }
       // preserve modal-*, otherwise refresh on modal trace does not work
       query['modal-agent-id'] = $location.search()['modal-agent-id'];

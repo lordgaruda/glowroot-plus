@@ -303,6 +303,32 @@ public class ServletPluginIT {
         // then
     }
 
+    @Test
+    public void testIgnoreWebSocketUpgrade() throws Exception {
+        container.executeNoExpectedTrace(TestWebSocketUpgrade.class);
+    }
+
+    @Test
+    public void testIgnoreSSE() throws Exception {
+        container.executeNoExpectedTrace(TestSSE.class);
+    }
+
+    @Test
+    public void testIgnoreXhrStreaming() throws Exception {
+        container.executeNoExpectedTrace(TestXhrStreaming.class);
+    }
+
+    @Test
+    public void testDoNotIgnoreStreamingWhenDisabled() throws Exception {
+        container.getConfigService().setPluginProperty(PLUGIN_ID, "ignoreStreamingRequests", false);
+        try {
+            Trace trace = container.execute(TestXhrStreaming.class, "Web");
+            assertThat(trace.getHeader().getHeadline()).isEqualTo("/chat/xhr_streaming");
+        } finally {
+            container.getConfigService().setPluginProperty(PLUGIN_ID, "ignoreStreamingRequests", true);
+        }
+    }
+
     private static String getDetailValue(Trace.Header header, String name) {
         for (Trace.DetailEntry detail : header.getDetailEntryList()) {
             if (detail.getName().equals(name)) {
@@ -451,6 +477,30 @@ public class ServletPluginIT {
         protected void doGet(HttpServletRequest request, HttpServletResponse response)
                 throws IOException {
             response.setStatus(400);
+        }
+    }
+
+    @SuppressWarnings("serial")
+    public static class TestWebSocketUpgrade extends TestServlet {
+        @Override
+        protected void before(HttpServletRequest request, HttpServletResponse response) {
+            ((MockHttpServletRequest) request).addHeader("Upgrade", "websocket");
+        }
+    }
+
+    @SuppressWarnings("serial")
+    public static class TestSSE extends TestServlet {
+        @Override
+        protected void before(HttpServletRequest request, HttpServletResponse response) {
+            ((MockHttpServletRequest) request).addHeader("Accept", "text/event-stream");
+        }
+    }
+
+    @SuppressWarnings("serial")
+    public static class TestXhrStreaming extends TestServlet {
+        @Override
+        protected void before(HttpServletRequest request, HttpServletResponse response) {
+            ((MockHttpServletRequest) request).setRequestURI("/chat/xhr_streaming");
         }
     }
 

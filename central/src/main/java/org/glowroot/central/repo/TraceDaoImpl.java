@@ -1547,7 +1547,8 @@ public class TraceDaoImpl implements TraceDao {
                     && filter.matchesHeadline(headline)
                     && filter.matchesError(errorMessage)
                     && filter.matchesUser(user)
-                    && filter.matchesAttributes(attributes)) {
+                    && filter.matchesAttributes(attributes)
+                    && filter.matchesStreaming(headline, null)) {
                 tracePoints.add(ImmutableTracePoint.builder()
                         .agentId(agentId)
                         .traceId(traceId)

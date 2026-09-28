@@ -65,6 +65,7 @@ public class ServletPluginProperties {
     private static boolean captureSessionAttributeNamesContainsId;
 
     private static boolean traceErrorOn4xxResponseCode;
+    private static boolean ignoreStreamingRequests = true;
 
     static {
         configService.registerConfigListener(new ServletPluginConfigListener());
@@ -166,6 +167,10 @@ public class ServletPluginProperties {
         return traceErrorOn4xxResponseCode;
     }
 
+    public static boolean ignoreStreamingRequests() {
+        return ignoreStreamingRequests;
+    }
+
     public static class SessionAttributePath {
 
         private final String attributeName;
@@ -257,6 +262,8 @@ public class ServletPluginProperties {
                     captureSessionAttributeNames.contains(HTTP_SESSION_ID_ATTR);
             traceErrorOn4xxResponseCode =
                     configService.getBooleanProperty("traceErrorOn4xxResponseCode").value();
+            ignoreStreamingRequests =
+                    configService.getBooleanProperty("ignoreStreamingRequests").value();
         }
 
         private static List<Pattern> buildPatternList(String propertyName) {

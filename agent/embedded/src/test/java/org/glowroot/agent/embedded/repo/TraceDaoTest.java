@@ -369,4 +369,34 @@ public class TraceDaoTest {
         // then
         assertThat(traceDao.readHeaderPlus(AGENT_ID, traceReader.traceId()).toCompletableFuture().get()).isNull();
     }
+
+    @Test
+    public void shouldFilterStreamingTraceWhenIgnoreStreamingEnabled() throws Exception {
+        // given
+        Trace.Header header = TraceTestData.createTraceHeader().toBuilder()
+                .setHeadline("/chat/xhr_streaming")
+                .build();
+        traceDao.store(TraceTestData.createTraceReader(header));
+        TraceQuery query = ImmutableTraceQuery.builder()
+                .transactionType("unit test")
+                .from(0)
+                .to(100)
+                .build();
+        TracePointFilter filterWithIgnore = ImmutableTracePointFilter.builder()
+                .durationNanosLow(0)
+                .ignoreStreaming(true)
+                .build();
+        TracePointFilter filterWithoutIgnore = ImmutableTracePointFilter.builder()
+                .durationNanosLow(0)
+                .ignoreStreaming(false)
+                .build();
+
+        // when
+        Result<TracePoint> resultIgnored = traceDao.readSlowPoints(AGENT_ID, query, filterWithIgnore, 10).get();
+        Result<TracePoint> resultNotIgnored = traceDao.readSlowPoints(AGENT_ID, query, filterWithoutIgnore, 10).get();
+
+        // then
+        assertThat(resultIgnored.records()).isEmpty();
+        assertThat(resultNotIgnored.records()).hasSize(1);
+    }
 }

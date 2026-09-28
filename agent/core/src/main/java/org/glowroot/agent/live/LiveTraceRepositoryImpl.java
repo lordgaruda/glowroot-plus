@@ -287,7 +287,8 @@ public class LiveTraceRepositoryImpl implements LiveTraceRepository {
                 && filter.matchesHeadline(transaction.getHeadline())
                 && filter.matchesError(errorMessage == null ? "" : errorMessage.message())
                 && filter.matchesUser(transaction.getUser())
-                && filter.matchesAttributes(transaction.getAttributes().asMap());
+                && filter.matchesAttributes(transaction.getAttributes().asMap())
+                && filter.matchesStreaming(transaction.getHeadline(), transaction.getTransactionName());
     }
 
     private boolean matchesKind(Transaction transaction, TraceKind traceKind) {

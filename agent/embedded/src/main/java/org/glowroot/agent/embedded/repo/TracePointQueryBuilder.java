@@ -74,6 +74,7 @@ class TracePointQueryBuilder {
         appendHeadlineCriteria(builder);
         appendErrorCriteria(builder);
         appendUserCriteria(builder);
+        appendIgnoreStreamingCriteria(builder);
         appendOrderByAndLimit(builder);
         return builder.build();
     }
@@ -162,6 +163,29 @@ class TracePointQueryBuilder {
         if (userComparator != null && !Strings.isNullOrEmpty(user)) {
             builder.appendText(" and upper(trace.\"USER\") " + userComparator.getComparator() + " ?");
             builder.addArg(userComparator.formatParameter(user));
+        }
+    }
+
+    private void appendIgnoreStreamingCriteria(ParameterizedSqlBuilder builder) {
+        if (filter.ignoreStreaming()) {
+            builder.appendText(" and (trace.headline is null or ("
+                    + " lower(trace.headline) not like '%xhr_streaming%'"
+                    + " and lower(trace.headline) not like '%xhr-streaming%'"
+                    + " and lower(trace.headline) not like '%websocket%'"
+                    + " and lower(trace.headline) not like '%/ws/%'"
+                    + " and lower(trace.headline) not like '%/ws'"
+                    + " and lower(trace.headline) not like '%text/event-stream%'"
+                    + " and lower(trace.headline) not like '%/events%'"
+                    + " and lower(trace.headline) not like '%/sse%'))"
+                    + " and (trace.transaction_name is null or ("
+                    + " lower(trace.transaction_name) not like '%xhr_streaming%'"
+                    + " and lower(trace.transaction_name) not like '%xhr-streaming%'"
+                    + " and lower(trace.transaction_name) not like '%websocket%'"
+                    + " and lower(trace.transaction_name) not like '%/ws/%'"
+                    + " and lower(trace.transaction_name) not like '%/ws'"
+                    + " and lower(trace.transaction_name) not like '%text/event-stream%'"
+                    + " and lower(trace.transaction_name) not like '%/events%'"
+                    + " and lower(trace.transaction_name) not like '%/sse%'))");
         }
     }
 

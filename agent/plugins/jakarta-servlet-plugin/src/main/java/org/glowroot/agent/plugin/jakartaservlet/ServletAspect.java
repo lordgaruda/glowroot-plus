@@ -23,6 +23,8 @@ import org.glowroot.agent.plugin.api.weaving.*;
 import org.glowroot.agent.plugin.jakartaservlet.bclglowrootbcl.*;
 import org.glowroot.agent.plugin.jakartaservlet.bclglowrootbcl.ServletPluginProperties.SessionAttributePath;
 
+import java.util.Locale;
+
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -123,6 +125,9 @@ public class ServletAspect {
                 return null;
             }
             HttpServletRequest request = (HttpServletRequest) req;
+            if (ServletPluginProperties.ignoreStreamingRequests() && isStreamingRequest(request)) {
+                return null;
+            }
             AuxThreadContext auxContextObj = (AuxThreadContext) request
                     .getAttribute(AsyncServletAspect.GLOWROOT_AUX_CONTEXT_REQUEST_ATTRIBUTE);
             if (auxContextObj != null) {
@@ -429,5 +434,55 @@ public class ServletAspect {
         public static void onBefore() {
             ContainerStartup.initPlatformMBeanServer();
         }
+    }
+
+    private static boolean isStreamingRequest(HttpServletRequest request) {
+        try {
+            String upgradeHeader = request.getHeader("Upgrade");
+            if (upgradeHeader != null && upgradeHeader.toLowerCase(Locale.ENGLISH).contains("websocket")) {
+                return true;
+            }
+            if (request.getHeader("Sec-WebSocket-Key") != null
+                    || request.getHeader("Sec-WebSocket-Version") != null) {
+                return true;
+            }
+            String acceptHeader = request.getHeader("Accept");
+            if (acceptHeader != null && acceptHeader.toLowerCase(Locale.ENGLISH).contains("text/event-stream")) {
+                return true;
+            }
+        } catch (Throwable t) {
+            // ignore
+        }
+        try {
+            String requestUri = request.getRequestURI();
+            if (requestUri != null) {
+                String lowerUri = requestUri.toLowerCase(Locale.ENGLISH);
+                if (lowerUri.contains("xhr_streaming")
+                        || lowerUri.contains("xhr-streaming")
+                        || lowerUri.contains("/websocket")
+                        || lowerUri.contains("/ws/")
+                        || lowerUri.endsWith("/ws")
+                        || lowerUri.contains("/events")
+                        || lowerUri.contains("/sse")) {
+                    return true;
+                }
+            }
+            String pathInfo = request.getPathInfo();
+            if (pathInfo != null) {
+                String lowerPathInfo = pathInfo.toLowerCase(Locale.ENGLISH);
+                if (lowerPathInfo.contains("xhr_streaming")
+                        || lowerPathInfo.contains("xhr-streaming")
+                        || lowerPathInfo.contains("/websocket")
+                        || lowerPathInfo.contains("/ws/")
+                        || lowerPathInfo.endsWith("/ws")
+                        || lowerPathInfo.contains("/events")
+                        || lowerPathInfo.contains("/sse")) {
+                    return true;
+                }
+            }
+        } catch (Throwable t) {
+            // ignore
+        }
+        return false;
     }
 }

@@ -17,6 +17,7 @@ package org.glowroot.common.live;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -33,7 +34,7 @@ import org.glowroot.wire.api.model.TraceOuterClass.Trace;
 public interface LiveTraceRepository {
 
     // null return value means trace not found
-    Trace. /*@Nullable*/ Header getHeader(String agentId, String traceId) throws Exception;
+    Trace. /* @Nullable */ Header getHeader(String agentId, String traceId) throws Exception;
 
     // null return value means trace not found or was found but had no entries
     //
@@ -44,21 +45,25 @@ public interface LiveTraceRepository {
 
     // null return value means trace not found or was found but had no queries
     //
-    // SharedQueryTexts are returned with either fullTrace or truncatedText/fullTraceSha1
+    // SharedQueryTexts are returned with either fullTrace or
+    // truncatedText/fullTraceSha1
     @Nullable
     Queries getQueries(String agentId, String traceId) throws Exception;
 
-    // null return value means trace not found or was found but had no main thread profile
+    // null return value means trace not found or was found but had no main thread
+    // profile
     @Nullable
     Profile getMainThreadProfile(String agentId, String traceId) throws Exception;
 
-    // null return value means trace not found or was found but had no aux thread profile
+    // null return value means trace not found or was found but had no aux thread
+    // profile
     @Nullable
     Profile getAuxThreadProfile(String agentId, String traceId) throws Exception;
 
     // null return value means trace not found
     //
-    // since this is only used by export, SharedQueryTexts are always returned with fullTrace
+    // since this is only used by export, SharedQueryTexts are always returned with
+    // fullTrace
     // (never with truncatedText/truncatedEndText/fullTraceSha1)
     @Nullable
     Trace getFullTrace(String agentId, String traceId) throws Exception;
@@ -77,19 +82,23 @@ public interface LiveTraceRepository {
     @Value.Immutable
     public interface Entries {
         List<Trace.Entry> entries();
+
         List<Trace.SharedQueryText> sharedQueryTexts();
     }
 
     @Value.Immutable
     public interface Queries {
         List<Aggregate.Query> queries();
+
         List<Trace.SharedQueryText> sharedQueryTexts();
     }
 
     @Value.Immutable
     public interface EntriesAndQueries {
         List<Trace.Entry> entries();
+
         List<Aggregate.Query> queries();
+
         List<Trace.SharedQueryText> sharedQueryTexts();
     }
 
@@ -97,16 +106,58 @@ public interface LiveTraceRepository {
     abstract class TracePointFilter {
 
         public abstract long durationNanosLow();
+
         public abstract @Nullable Long durationNanosHigh();
+
         public abstract @Nullable StringComparator headlineComparator();
+
         public abstract @Nullable String headline();
+
         public abstract @Nullable StringComparator errorMessageComparator();
+
         public abstract @Nullable String errorMessage();
+
         public abstract @Nullable StringComparator userComparator();
+
         public abstract @Nullable String user();
+
         public abstract @Nullable String attributeName();
+
         public abstract @Nullable StringComparator attributeValueComparator();
+
         public abstract @Nullable String attributeValue();
+
+        @Value.Default
+        public boolean ignoreStreaming() {
+            return false;
+        }
+
+        public boolean matchesStreaming(String headline, @Nullable String transactionName) {
+            if (!ignoreStreaming()) {
+                return true;
+            }
+            return !isStreaming(headline, transactionName);
+        }
+
+        public static boolean isStreaming(String headline, @Nullable String transactionName) {
+            return isStreamingText(headline) || isStreamingText(transactionName);
+        }
+
+        private static boolean isStreamingText(@Nullable String text) {
+            if (text == null || text.isEmpty()) {
+                return false;
+            }
+            String lower = text.toLowerCase(Locale.ENGLISH);
+            return lower.contains("xhr_streaming")
+                    || lower.contains("xhr-streaming")
+                    || lower.contains("websocket")
+                    || lower.contains("/ws/")
+                    || lower.endsWith("/ws")
+                    || lower.contains("text/event-stream")
+                    || lower.contains("/events")
+                    || lower.contains("/sse")
+                    || lower.contains("/socket");
+        }
 
         public boolean matchesDuration(long durationNanos) {
             if (durationNanos < durationNanosLow()) {
@@ -166,12 +217,19 @@ public interface LiveTraceRepository {
     @Value.Immutable
     interface TracePoint {
         String agentId();
+
         String traceId();
+
         long captureTime();
+
         long durationNanos();
+
         boolean partial();
+
         boolean error();
-        // checkLiveTraces is needed for active traces, but also needed for pending traces, just in
+
+        // checkLiveTraces is needed for active traces, but also needed for pending
+        // traces, just in
         // case the pending trace still isn't stored when it is clicked on
         boolean checkLiveTraces();
     }
@@ -192,7 +250,7 @@ public interface LiveTraceRepository {
         }
 
         @Override
-        public Trace. /*@Nullable*/ Header getHeader(String agentId, String traceId) {
+        public Trace. /* @Nullable */ Header getHeader(String agentId, String traceId) {
             return null;
         }
 
