@@ -124,6 +124,10 @@ public interface ConfigRepository {
 
     AgentConfig getAllConfig(String agentId) throws Exception;
 
+    default CompletionStage<@Nullable String> getConfigJson(String agentId) {
+        return java.util.concurrent.CompletableFuture.completedFuture(null);
+    }
+
     EmbeddedAdminGeneralConfig getEmbeddedAdminGeneralConfig();
 
     CompletionStage<CentralAdminGeneralConfig> getCentralAdminGeneralConfig();

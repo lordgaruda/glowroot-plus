@@ -36,9 +36,12 @@ glowroot.controller('TransactionSidebarCtrl', [
     $scope.rawExecutionThresholdDisplay = '10K raws';
 
     function loadRawExecutionThreshold() {
-      var agentId = $scope.agentId || $scope.agentRollupId || '';
+      var agentId = $scope.agentId;
+      if ($scope.layout.central && (!agentId || agentId.endsWith('::'))) {
+        return;
+      }
       var queryData = {
-        agentId: agentId,
+        agentId: agentId || '',
         pluginId: 'jdbc'
       };
       $http.get('backend/config/plugins' + queryStrings.encodeObject(queryData))

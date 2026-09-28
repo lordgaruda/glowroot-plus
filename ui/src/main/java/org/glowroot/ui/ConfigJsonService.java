@@ -152,19 +152,7 @@ class ConfigJsonService {
     @GET(path = "/backend/config/json", permission = "agent:config:view")
     String getAllConfig(@BindAgentId String agentId) throws Exception {
         AgentConfig config = configRepository.getAllConfig(agentId);
-        ObjectNode configRootNode = mapper.valueToTree(AllConfigDto.create(config));
-        ObjectMappers.stripEmptyContainerNodes(configRootNode);
-        StringBuilder sb = new StringBuilder();
-        JsonGenerator jg = mapper.getFactory().createGenerator(CharStreams.asWriter(sb));
-        try {
-            jg.setPrettyPrinter(ObjectMappers.getPrettyPrinter());
-            jg.writeObject(configRootNode);
-        } finally {
-            jg.close();
-        }
-        // newline is not required, just a personal preference
-        sb.append(ObjectMappers.NEWLINE);
-        return sb.toString();
+        return AllConfigDto.toJson(config);
     }
 
     @POST(path = "/backend/config/general", permission = "agent:config:edit:general")
