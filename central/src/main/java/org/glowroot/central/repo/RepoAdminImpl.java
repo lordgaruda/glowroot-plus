@@ -202,6 +202,14 @@ public class RepoAdminImpl implements RepoAdmin {
             }
             session.updateTableTwcsProperties(tableName, expirationHours);
             updatedTableCount++;
+            // Pause between schema updates to allow Cassandra schema agreement via gossip
+            // and avoid simultaneous compaction storms across tables
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
         return updatedTableCount;
     }
@@ -466,6 +474,10 @@ public class RepoAdminImpl implements RepoAdmin {
 
             int truncatedCount = 0;
             for (String tableName : traceTablesToTruncate) {
+                if (cancelPruningRequested.get()) {
+                    logger.info("Truncate operation cancelled by user after truncating {} tables", truncatedCount);
+                    break;
+                }
                 pruneStatus = ImmutableTracePruneStatus.builder()
                         .copyFrom(pruneStatus)
                         .currentStep("Truncating " + tableName + " (" + (truncatedCount + 1) + " of "
@@ -474,6 +486,13 @@ public class RepoAdminImpl implements RepoAdmin {
                 logger.info("Truncating Cassandra trace table: {}", tableName);
                 session.updateSchemaWithRetry("truncate table " + tableName);
                 truncatedCount++;
+                // Pause between truncates to allow Cassandra to flush and avoid snapshot disk spikes
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
 
             pruneStatus = ImmutableTracePruneStatus.builder()
@@ -576,39 +595,17 @@ public class RepoAdminImpl implements RepoAdmin {
         try {
             pruneStatus = ImmutableTracePruneStatus.builder()
                     .copyFrom(pruneStatus)
-                    .currentStep("Discovering slow point partitions...")
+                    .currentStep("Discovering partitions from transaction types...")
                     .build();
-            ResultSet rs = session.read("select distinct agent_rollup, transaction_type from trace_tt_slow_point",
-                    CassandraProfile.slow);
-            for (Row row : rs) {
-                slowPartitions.add(new PartitionKey(row.getString("agent_rollup"), row.getString("transaction_type")));
-            }
-        } catch (Exception e) {
-            logger.warn("Could not read distinct partitions from trace_tt_slow_point: {}", e.getMessage());
-        }
-
-        try {
-            pruneStatus = ImmutableTracePruneStatus.builder()
-                    .copyFrom(pruneStatus)
-                    .currentStep("Discovering error point partitions...")
-                    .build();
-            ResultSet rs = session.read("select distinct agent_rollup, transaction_type from trace_tt_error_point",
-                    CassandraProfile.slow);
-            for (Row row : rs) {
-                errorPartitions.add(new PartitionKey(row.getString("agent_rollup"), row.getString("transaction_type")));
-            }
-        } catch (Exception e) {
-            logger.warn("Could not read distinct partitions from trace_tt_error_point: {}", e.getMessage());
-        }
-
-        try {
             ResultSet rs = session.read("select agent_rollup, transaction_type from transaction_type where one = 1",
                     CassandraProfile.slow);
             for (Row row : rs) {
-                slowPartitions.add(new PartitionKey(row.getString("agent_rollup"), row.getString("transaction_type")));
+                PartitionKey pk = new PartitionKey(row.getString("agent_rollup"), row.getString("transaction_type"));
+                slowPartitions.add(pk);
+                errorPartitions.add(pk);
             }
         } catch (Exception e) {
-            logger.debug("Could not read from transaction_type: {}", e.getMessage());
+            logger.warn("Could not read from transaction_type: {}", e.getMessage());
         }
 
         long deletedCount = 0;
@@ -674,12 +671,18 @@ public class RepoAdminImpl implements RepoAdmin {
                                     CassandraProfile.slow);
                         }
                         deletedCount++;
-                        if (deletedCount % 100 == 0) {
+                        if (deletedCount % 50 == 0) {
                             pruneStatus = ImmutableTracePruneStatus.builder()
                                     .copyFrom(pruneStatus)
                                     .deletedCount(deletedCount)
                                     .errorCount(errorCount)
                                     .build();
+                            try {
+                                Thread.sleep(50);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
                         }
                     } catch (Exception e) {
                         errorCount++;
@@ -739,12 +742,18 @@ public class RepoAdminImpl implements RepoAdmin {
                                     CassandraProfile.slow);
                         }
                         deletedCount++;
-                        if (deletedCount % 100 == 0) {
+                        if (deletedCount % 50 == 0) {
                             pruneStatus = ImmutableTracePruneStatus.builder()
                                     .copyFrom(pruneStatus)
                                     .deletedCount(deletedCount)
                                     .errorCount(errorCount)
                                     .build();
+                            try {
+                                Thread.sleep(50);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
                         }
                     } catch (Exception e) {
                         errorCount++;
@@ -816,20 +825,23 @@ public class RepoAdminImpl implements RepoAdmin {
         if (deleteAuxThreadProfileV2 != null) {
             session.write(deleteAuxThreadProfileV2.bind(agentId, traceId), CassandraProfile.slow);
         }
-        if (deleteHeaderV1 != null) {
-            session.write(deleteHeaderV1.bind(agentId, traceId), CassandraProfile.slow);
-        }
-        if (deleteEntryV1 != null) {
-            session.write(deleteEntryV1.bind(agentId, traceId), CassandraProfile.slow);
-        }
-        if (deleteSharedQueryTextV1 != null) {
-            session.write(deleteSharedQueryTextV1.bind(agentId, traceId), CassandraProfile.slow);
-        }
-        if (deleteMainThreadProfileV1 != null) {
-            session.write(deleteMainThreadProfileV1.bind(agentId, traceId), CassandraProfile.slow);
-        }
-        if (deleteAuxThreadProfileV1 != null) {
-            session.write(deleteAuxThreadProfileV1.bind(agentId, traceId), CassandraProfile.slow);
+        // Only attempt v1 legacy deletes if v2 tables are not present, avoiding unnecessary mutations and range tombstones
+        if (deleteHeaderV2 == null) {
+            if (deleteHeaderV1 != null) {
+                session.write(deleteHeaderV1.bind(agentId, traceId), CassandraProfile.slow);
+            }
+            if (deleteEntryV1 != null) {
+                session.write(deleteEntryV1.bind(agentId, traceId), CassandraProfile.slow);
+            }
+            if (deleteSharedQueryTextV1 != null) {
+                session.write(deleteSharedQueryTextV1.bind(agentId, traceId), CassandraProfile.slow);
+            }
+            if (deleteMainThreadProfileV1 != null) {
+                session.write(deleteMainThreadProfileV1.bind(agentId, traceId), CassandraProfile.slow);
+            }
+            if (deleteAuxThreadProfileV1 != null) {
+                session.write(deleteAuxThreadProfileV1.bind(agentId, traceId), CassandraProfile.slow);
+            }
         }
     }
 

@@ -171,9 +171,11 @@
             <div class="card-body d-flex flex-column justify-content-between">
               <p class="card-text text-muted small">
                 Instantly truncates all <strong>26 Cassandra trace tables</strong> (headers, entries, queries, profile blobs, and point indexes).
-                Reclaims 100% of trace disk space across replicas immediately without tombstone accumulation.
                 <br><br>
-                <strong class="text-danger">Note:</strong> Historical aggregates (response-time graphs, throughput) and gauge metrics are preserved.
+                <strong class="text-danger">Important:</strong> By default, Cassandra automatically creates table snapshots before truncating.
+                To completely free disk space across Cassandra nodes after truncating, run <code>nodetool clearsnapshot {{stats.keyspaceName}}</code> on each node.
+                <br><br>
+                <strong>Preserved:</strong> Historical aggregates (response-time graphs, throughput) and gauge metrics are preserved.
               </p>
               <div class="mt-3">
                 <div gt-button
