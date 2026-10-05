@@ -37,16 +37,23 @@ import org.glowroot.common.config.ImmutableTransactionConfig;
 import org.glowroot.common.config.ImmutableUiDefaultsConfig;
 import org.glowroot.common.config.InstrumentationConfig;
 import org.glowroot.common.config.JvmConfig;
+import java.io.IOException;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.io.CharStreams;
 import org.glowroot.common.config.PropertyValue;
 import org.glowroot.common.config.SyntheticMonitorConfig;
 import org.glowroot.common.config.TransactionConfig;
 import org.glowroot.common.config.UiDefaultsConfig;
+import org.glowroot.common.util.ObjectMappers;
 import org.glowroot.common.util.Versions;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig.PluginProperty;
 
 @Value.Immutable
-abstract class AllConfigDto {
+public abstract class AllConfigDto {
 
     @Value.Default
     ImmutableTransactionConfig transactions() {
@@ -109,7 +116,7 @@ abstract class AllConfigDto {
         return builder.build();
     }
 
-    static AllConfigDto create(AgentConfig config) {
+    public static AllConfigDto create(AgentConfig config) {
         ImmutableAllConfigDto.Builder builder = ImmutableAllConfigDto.builder()
                 .transactions(TransactionConfig.create(config.getTransactionConfig()))
                 .jvm(JvmConfig.create(config.getJvmConfig()))
@@ -138,8 +145,20 @@ abstract class AllConfigDto {
                 .build();
     }
 
+    public static String toJson(AgentConfig config) throws IOException {
+        ObjectMapper mapper = ObjectMappers.create();
+        ObjectNode configRootNode = mapper.valueToTree(AllConfigDto.create(config));
+        ObjectMappers.stripEmptyContainerNodes(configRootNode);
+        StringBuilder sb = new StringBuilder();
+        try (JsonGenerator jg = mapper.getFactory().createGenerator(CharStreams.asWriter(sb))) {
+            jg.setPrettyPrinter(ObjectMappers.getPrettyPrinter());
+            jg.writeTree(configRootNode);
+        }
+        return sb.toString();
+    }
+
     @Value.Immutable
-    abstract static class PluginConfig {
+    public abstract static class PluginConfig {
 
         abstract String id();
 

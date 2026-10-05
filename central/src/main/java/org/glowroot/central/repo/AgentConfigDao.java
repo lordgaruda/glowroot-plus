@@ -21,20 +21,25 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.uuid.Uuids;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
 import org.glowroot.central.util.AsyncCache;
 import org.glowroot.central.util.ClusterManager;
 import org.glowroot.central.util.MoreFutures;
 import org.glowroot.central.util.Session;
 import org.glowroot.common2.repo.CassandraProfile;
 import org.glowroot.common2.repo.ConfigRepository.OptimisticLockException;
+import org.glowroot.ui.AllConfigDto;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig.AdvancedConfig;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig.PluginConfig;
 import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig.PluginProperty;
 import org.immutables.value.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -49,11 +54,14 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 // TODO agent config records never expire for abandoned agent rollup ids
 public class AgentConfigDao {
 
+    private static final Logger logger = LoggerFactory.getLogger(AgentConfigDao.class);
+
     private final Session session;
     private final AgentDisplayDao agentDisplayDao;
 
     private final PreparedStatement insertPS;
     private final PreparedStatement readPS;
+    private final PreparedStatement readConfigJsonPS;
     private final PreparedStatement updatePS;
     private final PreparedStatement updateCentralOnlyPS;
     private final PreparedStatement markUpdatedPS;
@@ -69,20 +77,27 @@ public class AgentConfigDao {
         this.asyncExecutor = asyncExecutor;
 
         session.createTableWithLCS("create table if not exists agent_config (agent_rollup_id"
-                + " varchar, config blob, config_update boolean, config_update_token uuid, primary"
-                + " key (agent_rollup_id))");
+                + " varchar, config blob, config_update boolean, config_update_token uuid,"
+                + " config_json varchar, primary key (agent_rollup_id))");
         // secondary index is needed for Cassandra 2.x (to avoid error on readUpdatePS)
         session.updateSchemaWithRetry(
                 "create index if not exists config_update_idx on agent_config (config_update)");
 
+        TableMetadata tableMetadata = session.getTable("agent_config");
+        if (tableMetadata != null && !tableMetadata.getColumn("config_json").isPresent()) {
+            session.updateSchemaWithRetry("alter table agent_config add config_json varchar");
+        }
+
         insertPS = session.prepare("insert into agent_config (agent_rollup_id, config,"
-                + " config_update, config_update_token) values (?, ?, ?, ?)");
+                + " config_update, config_update_token, config_json) values (?, ?, ?, ?, ?)");
         updatePS = session.prepare("update agent_config set config = ?, config_update = ?,"
-                + " config_update_token = ? where agent_rollup_id = ? if config = ?");
+                + " config_update_token = ?, config_json = ? where agent_rollup_id = ? if config = ?");
         updateCentralOnlyPS = session.prepare(
-                "update agent_config set config = ? where agent_rollup_id = ? if config = ?");
+                "update agent_config set config = ?, config_json = ? where agent_rollup_id = ? if config = ?");
         readPS = session.prepare(
                 "select config, config_update_token from agent_config where agent_rollup_id = ?");
+        readConfigJsonPS = session.prepare(
+                "select config_json from agent_config where agent_rollup_id = ?");
 
         markUpdatedPS = session.prepare("update agent_config set config_update = false,"
                 + " config_update_token = null where agent_rollup_id = ? if config_update_token"
@@ -98,7 +113,8 @@ public class AgentConfigDao {
             AgentConfig updatedAgentConfig =
                     buildUpdatedAgentConfig(agentConfig, existingAgentConfig, overwriteExisting);
             CompletionStage<?> chain = CompletableFuture.completedFuture(null);
-            if (!updatedAgentConfig.equals(existingAgentConfig)) {
+            if (!updatedAgentConfig.equals(existingAgentConfig) || overwriteExisting) {
+                String configJson = toConfigJson(updatedAgentConfig);
                 int i = 0;
                 BoundStatement boundStatement = insertPS.bind()
                         .setString(i++, agentId)
@@ -107,7 +123,8 @@ public class AgentConfigDao {
                         // agent will not consider collectInit() to be successful until it receives updated
                         // agent config
                         .setBoolean(i++, false)
-                        .setToNull(i++);
+                        .setToNull(i++)
+                        .setString(i++, configJson);
                 chain = session.writeAsync(boundStatement, CassandraProfile.collector).thenRun(() -> agentConfigCache.invalidate(agentId));
             }
             String agentRollupId = AgentRollupIds.getParent(agentId);
@@ -131,18 +148,20 @@ public class AgentConfigDao {
                         // that pertain to rollups
                         int i = 0;
                         AdvancedConfig advancedConfig = updatedAgentConfig.getAdvancedConfig();
+                        AgentConfig rollupConfig = AgentConfig.newBuilder()
+                                .setUiDefaultsConfig(updatedAgentConfig.getUiDefaultsConfig())
+                                .setAdvancedConfig(AdvancedConfig.newBuilder()
+                                        .setMaxQueryAggregates(advancedConfig.getMaxQueryAggregates())
+                                        .setMaxServiceCallAggregates(
+                                                advancedConfig.getMaxServiceCallAggregates()))
+                                .build();
+                        String rollupConfigJson = toConfigJson(rollupConfig);
                         BoundStatement boundStatement = insertPS.bind()
                                 .setString(i++, loopAgentRollupId)
-                                .setByteBuffer(i++, ByteBuffer.wrap(AgentConfig.newBuilder()
-                                        .setUiDefaultsConfig(updatedAgentConfig.getUiDefaultsConfig())
-                                        .setAdvancedConfig(AdvancedConfig.newBuilder()
-                                                .setMaxQueryAggregates(advancedConfig.getMaxQueryAggregates())
-                                                .setMaxServiceCallAggregates(
-                                                        advancedConfig.getMaxServiceCallAggregates()))
-                                        .build()
-                                        .toByteArray()))
+                                .setByteBuffer(i++, ByteBuffer.wrap(rollupConfig.toByteArray()))
                                 .setBoolean(i++, false)
-                                .setToNull(i++);
+                                .setToNull(i++)
+                                .setString(i++, rollupConfigJson);
                         return session.writeAsync(boundStatement, CassandraProfile.collector)
                                 .thenRun(() -> agentConfigCache.invalidate(loopAgentRollupId));
                     }).thenCompose(v -> apply(indexAgentRollupId + 1));
@@ -188,6 +207,7 @@ public class AgentConfigDao {
                         + " it does not allow config updates via the central collector"));
             }
             return agentConfigUpdater.updateAgentConfig(currAgentConfig).thenCompose(updatedAgentConfig -> {
+                String configJson = toConfigJson(updatedAgentConfig);
                 BoundStatement boundStatement;
                 if (centralOnly) {
                     boundStatement = updateCentralOnlyPS.bind();
@@ -200,6 +220,7 @@ public class AgentConfigDao {
                     boundStatement = boundStatement.setBoolean(i++, true)
                             .setUuid(i++, Uuids.random());
                 }
+                boundStatement = boundStatement.setString(i++, configJson);
                 boundStatement = boundStatement.setString(i++, agentRollupId)
                         .setByteBuffer(i++, ByteBuffer.wrap(currValue.toByteArray()));
                 boundStatement = boundStatement.setSerialConsistencyLevel(ConsistencyLevel.LOCAL_SERIAL);
@@ -222,6 +243,25 @@ public class AgentConfigDao {
 
     public CompletableFuture<AgentConfig> readAsync(String agentRollupId) {
         return agentConfigCache.get(agentRollupId).thenApply(agent -> agent.map(AgentConfigAndUpdateToken::config).orElse(null));
+    }
+
+    public CompletableFuture<@Nullable String> readConfigJsonAsync(String agentRollupId) {
+        BoundStatement boundStatement = readConfigJsonPS.bind().setString(0, agentRollupId);
+        return session.readAsync(boundStatement, CassandraProfile.collector)
+                .thenApply(results -> {
+                    Row row = results.one();
+                    return row == null ? null : row.getString(0);
+                }).toCompletableFuture();
+    }
+
+    @VisibleForTesting
+    static @Nullable String toConfigJson(AgentConfig agentConfig) {
+        try {
+            return AllConfigDto.toJson(agentConfig);
+        } catch (Exception e) {
+            logger.error("Failed to serialize agent config to json: {}", e.getMessage(), e);
+            return null;
+        }
     }
 
     // does not apply to agent rollups

@@ -87,8 +87,11 @@ public class ConfigDaoIT {
         agentConfigDao.store("a", agentConfig, false).toCompletableFuture().get();
         // when
         AgentConfig readAgentConfig = agentConfigDao.readAsync("a").get();
+        String readConfigJson = agentConfigDao.readConfigJsonAsync("a").toCompletableFuture().get();
         // then
         assertThat(readAgentConfig).isEqualTo(agentConfig);
+        assertThat(readConfigJson).isNotNull();
+        assertThat(readConfigJson).contains("\"transactions\"");
     }
 
     @Test
@@ -105,5 +108,24 @@ public class ConfigDaoIT {
         AgentConfig readAgentConfig = agentConfigDao.readAsync("a").get();
         // then
         assertThat(readAgentConfig).isEqualTo(agentConfig);
+    }
+
+    @Test
+    public void shouldOverwriteExistingAgentConfig() throws Exception {
+        // given
+        AgentConfig agentConfig = AgentConfig.getDefaultInstance();
+        agentConfigDao.store("a", agentConfig, false).toCompletableFuture().get();
+        agentConfigDao.store("a", AgentConfig.newBuilder()
+                .setTransactionConfig(TransactionConfig.newBuilder()
+                        .setSlowThresholdMillis(OptionalInt32.newBuilder()
+                                .setValue(1234)))
+                .build(), true).toCompletableFuture().get();
+        // when
+        AgentConfig readAgentConfig = agentConfigDao.readAsync("a").get();
+        String readConfigJson = agentConfigDao.readConfigJsonAsync("a").toCompletableFuture().get();
+        // then
+        assertThat(readAgentConfig.getTransactionConfig().getSlowThresholdMillis().getValue()).isEqualTo(1234);
+        assertThat(readConfigJson).isNotNull();
+        assertThat(readConfigJson).contains("\"slowThresholdMillis\": 1234");
     }
 }

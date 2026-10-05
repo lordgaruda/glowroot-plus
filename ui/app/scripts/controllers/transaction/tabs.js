@@ -139,6 +139,11 @@ glowroot.controller('TransactionTabCtrl', [
       if (search['custom-attribute-value']) {
         query.attributeValue = search['custom-attribute-value'];
       }
+      if (search['ignore-streaming'] !== undefined) {
+        query.ignoreStreaming = search['ignore-streaming'] !== 'false';
+      } else {
+        query.ignoreStreaming = true;
+      }
       if (autoRefresh) {
         query.autoRefresh = true;
       }

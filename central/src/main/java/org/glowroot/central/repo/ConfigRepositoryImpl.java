@@ -273,6 +273,11 @@ public class ConfigRepositoryImpl implements ConfigRepository {
     }
 
     @Override
+    public CompletionStage<@Nullable String> getConfigJson(String agentId) {
+        return agentConfigDao.readConfigJsonAsync(agentId);
+    }
+
+    @Override
     public EmbeddedAdminGeneralConfig getEmbeddedAdminGeneralConfig() {
         throw new UnsupportedOperationException();
     }

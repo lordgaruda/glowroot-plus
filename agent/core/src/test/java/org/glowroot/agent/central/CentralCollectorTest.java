@@ -59,4 +59,31 @@ public class CentralCollectorTest {
         assertThat(CentralCollector.isAgentVersionGreaterThanCentralVersion("1.10.2", "2.10.2"))
                 .isFalse();
     }
+
+    @Test
+    public void shouldCheckConfigSynced(@org.junit.jupiter.api.io.TempDir java.io.File tempDir) throws Exception {
+        java.io.File configFile = new java.io.File(tempDir, "config.json");
+        java.io.File configSyncedFile = new java.io.File(tempDir, "config.synced");
+
+        // not synced when config.synced doesn't exist
+        assertThat(CentralCollector.isConfigSynced(configSyncedFile, configFile, "test-agent")).isFalse();
+
+        com.google.common.io.Files.asCharSink(configFile, java.nio.charset.StandardCharsets.UTF_8)
+                .write("{\"hello\":\"world\"}");
+        String hash = com.google.common.io.Files.asByteSource(configFile)
+                .hash(com.google.common.hash.Hashing.sha256()).toString();
+
+        CentralCollector.writeConfigSyncedFile(configSyncedFile, "test-agent", hash);
+
+        // synced when hash and agentId match
+        assertThat(CentralCollector.isConfigSynced(configSyncedFile, configFile, "test-agent")).isTrue();
+
+        // not synced when agentId differs
+        assertThat(CentralCollector.isConfigSynced(configSyncedFile, configFile, "other-agent")).isFalse();
+
+        // not synced when config.json content is modified
+        com.google.common.io.Files.asCharSink(configFile, java.nio.charset.StandardCharsets.UTF_8)
+                .write("{\"hello\":\"modified\"}");
+        assertThat(CentralCollector.isConfigSynced(configSyncedFile, configFile, "test-agent")).isFalse();
+    }
 }

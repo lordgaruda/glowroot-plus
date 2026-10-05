@@ -55,6 +55,14 @@
       "description": "Mark the trace as an error when a 4xx response code is returned."
     },
     {
+      "name": "ignoreStreamingRequests",
+      "type": "boolean",
+      "default": true,
+      "label": "Ignore streaming requests",
+      "checkboxLabel": "Ignore SSE, WebSocket, and XHR streaming requests",
+      "description": "Ignore Server-Sent Events (SSE), WebSocket, and XHR streaming requests (e.g. SockJS xhr_streaming) so they do not create long-running traces."
+    },
+    {
       "name": "captureRequestRemoteAddr",
       "type": "boolean",
       "label": "Capture request remote address",

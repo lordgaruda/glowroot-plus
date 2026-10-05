@@ -28,7 +28,9 @@ import java.util.regex.Pattern;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
+import com.google.common.hash.Hashing;
 import com.google.common.io.Closer;
+import com.google.common.io.Files;
 import io.grpc.stub.StreamObserver;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -95,6 +97,9 @@ public class CentralCollector implements Collector {
 
     private final boolean configReadOnly;
     private final File configSyncedFile;
+    private final File configFile;
+    private final Map<String, String> properties;
+    private final AgentConfigUpdater syncingAgentConfigUpdater;
 
     private final CentralConnection centralConnection;
     private final CollectorServiceStub collectorServiceStub;
@@ -127,9 +132,30 @@ public class CentralCollector implements Collector {
         this.collectorAddress = collectorAddress;
         this.configService = configService;
         this.configReadOnly = configReadOnly;
+        this.properties = properties;
+        this.configFile = new File(confDirs.get(0), "config.json");
         configSyncedFile = new File(confDirs.get(0), "config.synced");
 
         startupLogger.info("agent id: {}", agentId);
+
+        syncingAgentConfigUpdater = new AgentConfigUpdater() {
+            @Override
+            public void update(AgentConfig agentConfig) throws IOException {
+                agentConfigUpdater.update(agentConfig);
+                if (!configReadOnly) {
+                    try {
+                        String configHash = null;
+                        if (configFile.exists()) {
+                            configHash = Files.asByteSource(configFile).hash(Hashing.sha256()).toString();
+                        }
+                        writeConfigSyncedFile(configSyncedFile, CentralCollector.this.agentId, configHash);
+                    } catch (IOException e) {
+                        startupLogger.error("could not write to file '{}': {}",
+                                configSyncedFile.getAbsolutePath(), e.getMessage(), e);
+                    }
+                }
+            }
+        };
 
         AtomicBoolean inConnectionFailure = new AtomicBoolean();
         centralConnection = new CentralConnection(collectorAddress, collectorAuthority, confDirs,
@@ -137,26 +163,21 @@ public class CentralCollector implements Collector {
         collectorServiceStub = CollectorServiceGrpc.newStub(centralConnection.getChannel())
                 .withCompression("gzip");
         downstreamServiceObserver = new DownstreamServiceObserver(centralConnection,
-                agentConfigUpdater, configReadOnly, liveJvmService, liveWeavingService,
+                syncingAgentConfigUpdater, configReadOnly, liveJvmService, liveWeavingService,
                 liveTraceRepository, agentId, inConnectionFailure, sharedQueryTextLimiter);
     }
 
     @Override
     public void init(List<File> confDirs, final Environment environment, AgentConfig agentConfig,
             final AgentConfigUpdater agentConfigUpdater) throws IOException {
-        final String configSyncedAgentId;
-        if (configReadOnly) {
-            configSyncedAgentId = "";
-        } else {
-            configSyncedAgentId = readConfigSyncedAgentId(configSyncedFile);
-        }
+        boolean forceSyncToCentral = Boolean.parseBoolean(properties.get("glowroot.config.syncToCentral"));
+        boolean isSynced = !forceSyncToCentral && !configReadOnly && isConfigSynced(configSyncedFile, configFile, agentId);
         final InitMessage initMessage = InitMessage.newBuilder()
                 .setAgentId(agentId)
                 .setEnvironment(environment)
                 .setAgentConfig(agentConfig.toBuilder()
                         .setConfigReadOnly(configReadOnly))
-                .setOverwriteExistingAgentConfig(
-                        !agentId.equals(configSyncedAgentId) || configReadOnly)
+                .setOverwriteExistingAgentConfig(!isSynced || configReadOnly)
                 .build();
         centralConnection.asyncCallInit(new GrpcCall<InitResponse>() {
             @Override
@@ -178,14 +199,17 @@ public class CentralCollector implements Collector {
                 }
                 if (response.hasAgentConfig() && !configReadOnly) {
                     try {
-                        agentConfigUpdater.update(response.getAgentConfig());
+                        syncingAgentConfigUpdater.update(response.getAgentConfig());
                     } catch (IOException e) {
                         logger.error(e.getMessage(), e);
                     }
-                }
-                if (!agentId.equals(configSyncedAgentId) && !configReadOnly) {
+                } else if (!configReadOnly) {
                     try {
-                        writeConfigSyncedFile(configSyncedFile, agentId);
+                        String configHash = null;
+                        if (configFile.exists()) {
+                            configHash = Files.asByteSource(configFile).hash(Hashing.sha256()).toString();
+                        }
+                        writeConfigSyncedFile(configSyncedFile, agentId, configHash);
                     } catch (IOException e) {
                         startupLogger.error("could not write to file '{}': {}",
                                 configSyncedFile.getAbsolutePath(), e.getMessage(), e);
@@ -342,16 +366,28 @@ public class CentralCollector implements Collector {
         return agentPatch > centralPatch;
     }
 
-    private static String readConfigSyncedAgentId(File file) throws IOException {
-        if (file.exists()) {
-            Properties properties = PropertiesFiles.load(file);
-            return properties.getProperty("agent.id", "").trim();
-        } else {
-            return "";
+    @VisibleForTesting
+    static boolean isConfigSynced(File configSyncedFile, File configFile, String agentId)
+            throws IOException {
+        if (!configSyncedFile.exists()) {
+            return false;
         }
+        Properties properties = PropertiesFiles.load(configSyncedFile);
+        String syncedAgentId = properties.getProperty("agent.id", "").trim();
+        if (!agentId.equals(syncedAgentId)) {
+            return false;
+        }
+        String syncedHash = properties.getProperty("config.hash", "").trim();
+        if (!syncedHash.isEmpty() && configFile.exists()) {
+            String currentHash = Files.asByteSource(configFile).hash(Hashing.sha256()).toString();
+            return syncedHash.equals(currentHash);
+        }
+        return true;
     }
 
-    private static void writeConfigSyncedFile(File file, String agentId) throws IOException {
+    @VisibleForTesting
+    static void writeConfigSyncedFile(File file, String agentId, @Nullable String configHash)
+            throws IOException {
         Closer closer = Closer.create();
         try {
             PrintWriter out = closer.register(new PrintWriter(file, UTF_8.name()));
@@ -373,6 +409,9 @@ public class CentralCollector implements Collector {
             out.println("# running agent's agent.id");
             out.println("");
             out.println("agent.id=" + agentId);
+            if (configHash != null) {
+                out.println("config.hash=" + configHash);
+            }
         } catch (Throwable t) {
             throw closer.rethrow(t);
         } finally {

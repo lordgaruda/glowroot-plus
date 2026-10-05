@@ -91,7 +91,7 @@ glowroot.controller('SyntheticMonitorsCtrl', [
       if (!last) {
         query.from = $scope.range.chartFrom;
         query.to = $scope.range.chartTo;
-      } else if (last !== 4 * 60 * 60 * 1000) {
+      } else if (last !== 15 * 60 * 1000) {
         query.last = last;
       }
       return query;
@@ -196,7 +196,7 @@ glowroot.controller('SyntheticMonitorsCtrl', [
       if (location.chartFrom && location.chartTo) {
         location.last = 0;
       } else if (!location.last) {
-        location.last = 4 * 60 * 60 * 1000;
+        location.last = 15 * 60 * 1000;
       }
       location.syntheticMonitorIds = $location.search()['synthetic-monitor-id'];
       showingAll = location.syntheticMonitorIds === undefined;

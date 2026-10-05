@@ -18,6 +18,7 @@ package org.glowroot.common2.repo;
 import java.util.List;
 import java.util.Map;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.immutables.value.Value;
 
 public interface RepoAdmin {
@@ -39,6 +40,16 @@ public interface RepoAdmin {
     void resizeIfNeeded() throws Exception;
 
     int updateCassandraTwcsWindowSizes() throws Exception;
+
+    CassandraDbStats getCassandraDbStats() throws Exception;
+
+    int truncateAllTraces() throws Exception;
+
+    void pruneTracesOlderThan(int days, boolean updateRetentionPolicy) throws Exception;
+
+    TracePruneStatus getTracePruneStatus();
+
+    void cancelTracePruning();
 
     List<CassandraWriteTotals> getCassandraWriteTotalsPerTable(int limit);
 
@@ -85,5 +96,51 @@ public interface RepoAdmin {
         long bytesWritten(); // only includes varchar and blob columns
         Map<String, Long> bytesWrittenPerColumn(); // only includes varchar and blob columns
         boolean drilldown();
+    }
+
+    @Value.Immutable
+    interface CassandraDbStats {
+        String clusterName();
+        String keyspaceName();
+        String releaseVersion();
+        String partitioner();
+        long totalEstimatedBytes();
+        long totalEstimatedPartitions();
+        List<CassandraNodeStats> nodes();
+        List<CassandraTableStats> tables();
+    }
+
+    @Value.Immutable
+    interface CassandraNodeStats {
+        String endpoint();
+        String status();
+        String datacenter();
+        String rack();
+        String releaseVersion();
+    }
+
+    @Value.Immutable
+    interface CassandraTableStats {
+        String tableName();
+        String category();
+        String compactionStrategy();
+        long estimatedBytes();
+        long estimatedPartitions();
+        int defaultTtlSeconds();
+        long recentBytesWritten();
+        long recentRowsWritten();
+    }
+
+    @Value.Immutable
+    interface TracePruneStatus {
+        boolean running();
+        String action();
+        int days();
+        long deletedCount();
+        long errorCount();
+        @Nullable String currentStep();
+        @Nullable Long startTime();
+        @Nullable Long completedTime();
+        @Nullable String lastError();
     }
 }

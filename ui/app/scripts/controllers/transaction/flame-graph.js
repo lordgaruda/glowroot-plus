@@ -41,7 +41,7 @@ glowroot.controller('TransactionFlameGraphCtrl', [
     $scope.truncateBranchPercentage = $location.search()['truncate-branch-percentage'] || 1.0;
 
     if (!$scope.last && (isNaN($scope.from) || isNaN($scope.to))) {
-      $scope.last = 4 * 60 * 60 * 1000;
+      $scope.last = 15 * 60 * 1000;
     }
 
     if ($scope.last) {

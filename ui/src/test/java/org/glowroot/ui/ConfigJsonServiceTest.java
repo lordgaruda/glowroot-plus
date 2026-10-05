@@ -1,7 +1,12 @@
 package org.glowroot.ui;
 
 import org.junit.jupiter.api.Test;
+import org.glowroot.wire.api.model.AgentConfigOuterClass.AgentConfig;
+import org.glowroot.wire.api.model.Proto;
 
+import java.util.Arrays;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ConfigJsonServiceTest {
@@ -36,5 +41,29 @@ class ConfigJsonServiceTest {
 
         // then
         assertEquals("Web", ret.defaultTransactionType());
+    }
+
+    @Test
+    void shouldConvertAgentConfigToJson() throws Exception {
+        AgentConfig config = AgentConfig.newBuilder()
+                .setTransactionConfig(AgentConfig.TransactionConfig.newBuilder()
+                        .setSlowThresholdMillis(Proto.OptionalInt32.newBuilder().setValue(1234)))
+                .setAdvancedConfig(AgentConfig.AdvancedConfig.newBuilder()
+                        .setMaxQueryAggregates(Proto.OptionalInt32.newBuilder().setValue(500)))
+                .addPluginConfig(AgentConfig.PluginConfig.newBuilder()
+                        .setId("test-plugin")
+                        .setName("Test Plugin")
+                        .addProperty(AgentConfig.PluginProperty.newBuilder()
+                                .setName("prop1")
+                                .setValue(AgentConfig.PluginProperty.Value.newBuilder()
+                                        .setBval(true))))
+                .build();
+
+        String json = AllConfigDto.toJson(config);
+        assertThat(json).isNotNull();
+        assertThat(json).contains("\"slowThresholdMillis\": 1234");
+        assertThat(json).contains("\"maxQueryAggregates\": 500");
+        assertThat(json).contains("\"test-plugin\"");
+        assertThat(json).contains("\"prop1\": true");
     }
 }

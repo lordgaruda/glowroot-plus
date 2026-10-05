@@ -24,6 +24,7 @@ Read this first. Then wiki. Then `issue-gate.md` for verdict.
 | UI won't open | App running? `UI listening on` in log? Port/bind? → `dev-setup.md` + `ORG-CONTEXT.md` |
 | Find slow traces | Transactions → sort by time → open trace → Queries / Profile |
 | Filter errors | Errors tab = errors in **traced** transactions only; not container stdout |
+| JBoss/WildFly `GeneratedMethodMeta` CNFE | `-Djboss.modules.system.pkgs=org.glowroot` (append if set); `-javaagent` only — README FAQ / `#1112` |
 
 **Verdict:** `wiki-only` or `no-issue`
 
@@ -49,7 +50,7 @@ Read this first. Then wiki. Then `issue-gate.md` for verdict.
 |---------|----------------|
 | How does heap work? | JMX heap used/max via Gauges; no built-in % of -Xmx (`#946`) |
 | p99 vs p95? | Check wiki Transaction tabs for aggregate type |
-| CPU spike after upgrade | Version path, embedded vs central, H2 upgrade `#1180` |
+| CPU spike after upgrade | Version path, embedded vs central, H2 upgrade `#1180` → [docs/embedded-h2-upgrade.md](../../docs/embedded-h2-upgrade.md) |
 | JVM RAM vs OS | JMX heap ≠ process RSS |
 
 **Verdict:** `wiki-only` or `discussion`

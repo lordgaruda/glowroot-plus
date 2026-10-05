@@ -156,6 +156,7 @@ class TracePointJsonService {
                 .attributeName(request.attributeName())
                 .attributeValueComparator(request.attributeValueComparator())
                 .attributeValue(request.attributeValue())
+                .ignoreStreaming(request.ignoreStreaming())
                 .build();
     }
 
@@ -403,6 +404,10 @@ class TracePointJsonService {
         public abstract @Nullable String attributeName();
         public abstract @Nullable StringComparator attributeValueComparator();
         public abstract @Nullable String attributeValue();
+        @Value.Default
+        public boolean ignoreStreaming() {
+            return true;
+        }
 
         // 0 means no limit (used by filtered trace-count)
         @Value.Default
