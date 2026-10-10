@@ -46,7 +46,7 @@ public class NplusOneAnalysisAspect {
     // =================== Connection Close ===================
 
     @Pointcut(className = "java.sql.Connection", methodName = "close",
-            methodParameterTypes = {}, nestingGroup = "jdbc",
+            methodParameterTypes = {},
             order = 100) // high order to run after other close advice
     public static class ConnectionCloseAdvice {
         @IsEnabled
@@ -62,7 +62,7 @@ public class NplusOneAnalysisAspect {
     // =================== Connection Commit ===================
 
     @Pointcut(className = "java.sql.Connection", methodName = "commit",
-            methodParameterTypes = {}, nestingGroup = "jdbc",
+            methodParameterTypes = {},
             order = 100)
     public static class ConnectionCommitAdvice {
         @IsEnabled

@@ -102,6 +102,19 @@ public class NplusOneDetector {
             state.exactQueryCounts.put(exactQuery, exactCount + 1);
         }
 
+        // Check if N+1 or duplicate threshold is reached live
+        double nplusOneThresholdDbl = getDoubleProperty(configService, "nplusOneThreshold", 5.0);
+        int nplusOneThreshold = (int) nplusOneThresholdDbl;
+        double duplicateThresholdDbl = getDoubleProperty(configService, "duplicateQueryThreshold", 3.0);
+        int duplicateThreshold = (int) duplicateThresholdDbl;
+
+        int normCount = state.normalizedQueryCounts.get(normalizedQuery);
+        int exCount = state.exactQueryCounts.get(exactQuery);
+        if ((nplusOneThreshold > 0 && normCount >= nplusOneThreshold)
+                || (duplicateThreshold > 0 && exCount >= duplicateThreshold)) {
+            analyzeAndReport(context, configService);
+        }
+
         // Check if raw execution threshold is reached live (query executions or row count)
         double rawExecutionThresholdDbl = getDoubleProperty(configService, "rawExecutionThreshold", 10000.0);
         int rawExecutionThreshold = (int) rawExecutionThresholdDbl;
