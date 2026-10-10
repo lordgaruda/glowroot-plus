@@ -1,0 +1,120 @@
+name: Create GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g., v0.14.8-beta.6)'
+        required: true
+        default: 'v0.14.8-beta.6'
+      prerelease:
+        description: 'Mark as pre-release?'
+        type: boolean
+        default: true
+      draft:
+        description: 'Save as draft?'
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5.2.0
+        with:
+          distribution: adopt
+          java-version: 17
+
+      - name: Restore Maven cache
+        uses: actions/cache@v5.0.3
+        with:
+          path: ~/.m2/repository
+          key: release-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            release-
+
+      - name: Determine Version and Tag
+        id: vars
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          # Strip leading 'v' to get version string
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build distributions
+        run: |
+          VERSION="${{ steps.vars.outputs.version }}"
+          # Set release version in pom.xml so built artifacts do not carry -SNAPSHOT
+          mvn versions:set -DgenerateBackupPoms=false -DnewVersion="$VERSION"
+
+          # Build agent and central distributions skipping tests
+          mvn clean install -pl :glowroot-agent,:glowroot-central -am \
+                            -Pjavadoc \
+                            -DskipTests \
+                            -B
+
+      - name: Prepare release assets
+        run: |
+          VERSION="${{ steps.vars.outputs.version }}"
+
+          # Copy and rename distribution packages
+          cp $(ls agent/dist/target/glowroot-agent-*-dist.zip | head -n 1) "glowroot-${VERSION}-dist.zip"
+          cp $(ls central/target/glowroot-central-*-dist.zip | head -n 1) "glowroot-central-${VERSION}-dist.zip"
+          cp $(ls central/target/glowroot-central-*.war | head -n 1) "glowroot-central-${VERSION}-dist.war"
+
+          # Verify assets exist
+          ls -lh glowroot-${VERSION}-dist.zip glowroot-central-${VERSION}-dist.zip glowroot-central-${VERSION}-dist.war
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.vars.outputs.tag }}"
+          VERSION="${{ steps.vars.outputs.version }}"
+
+          PRERELEASE_FLAG=""
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ] || [[ "$VERSION" == *"beta"* ]] || [[ "$VERSION" == *"alpha"* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          DRAFT_FLAG=""
+          if [ "${{ github.event.inputs.draft }}" = "true" ]; then
+            DRAFT_FLAG="--draft"
+          fi
+
+          # Create release if not present, otherwise upload/clobber assets
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG exists. Uploading assets..."
+            gh release upload "$TAG" \
+              "glowroot-${VERSION}-dist.zip" \
+              "glowroot-central-${VERSION}-dist.zip" \
+              "glowroot-central-${VERSION}-dist.war" \
+              --clobber
+          else
+            echo "Creating release $TAG..."
+            gh release create "$TAG" \
+              "glowroot-${VERSION}-dist.zip" \
+              "glowroot-central-${VERSION}-dist.zip" \
+              "glowroot-central-${VERSION}-dist.war" \
+              --title "Version ${VERSION}" \
+              --generate-notes \
+              $PRERELEASE_FLAG \
+              $DRAFT_FLAG
+          fi
