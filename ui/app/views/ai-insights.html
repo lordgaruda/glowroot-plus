@@ -39,8 +39,9 @@
   </div>
   <button class="btn btn-default" ng-if="layout.adminEdit" ng-click="loadConfig()">Administrator configuration</button>
   <div ng-if="layout.adminEdit &amp;&amp; configText">
-    <p>Credentials: OPENAI_API_KEY / ANTHROPIC_API_KEY on every central node. Keys are never sent to the browser.
+    <p>Credentials: OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY on every central node. Keys are never sent to the browser.
       Model is required when enabling analysis. Cross-provider fallback requires explicit opt-in.</p>
+    <p>Gemini's official free tier can reduce cost, subject to Google's model quotas and terms. It still requires a Gemini API key. Consumer sign-in sessions from Antigravity, ChatGPT, or Claude are not accepted here.</p>
     <textarea class="form-control" rows="22" aria-label="AI Insights configuration JSON" ng-model="configText"></textarea>
     <button class="btn btn-primary" ng-click="saveConfig()">Save</button>
     <button class="btn btn-default" ng-click="test()">Test provider (synthetic evidence)</button>

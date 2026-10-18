@@ -45,11 +45,12 @@ public abstract class HttpAnalysisProvider implements AnalysisProvider {
     protected abstract ObjectNode request(ObjectNode evidence, InsightsConfig config);
     protected abstract void authenticate(HttpURLConnection connection, String key);
     protected abstract String response(JsonNode body) throws Exception;
+    protected String endpoint(InsightsConfig config) { return endpoint; }
     public final JsonNode analyze(ObjectNode evidence, InsightsConfig config) throws Exception {
         if (key == null || key.isEmpty()) throw new ProviderException("credentials unavailable", false, 0);
         byte[] bytes = MAPPER.writeValueAsBytes(request(evidence, config));
         if (bytes.length > config.maxPayloadBytes) throw new ProviderException("payload limit", false, 0);
-        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint(config)).openConnection();
         connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(config.timeoutSeconds * 1000);
         connection.setReadTimeout(config.timeoutSeconds * 1000);

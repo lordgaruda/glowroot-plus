@@ -48,7 +48,7 @@ public final class InsightsService implements InsightsAccess, AutoCloseable {
     private final InsightsTelemetry telemetry;
     private final ActiveAgentRepository agents;
     private final TransactionTypeRepository types;
-    private final AnalysisProvider openai, anthropic;
+    private final AnalysisProvider openai, anthropic, gemini;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "Glowroot-AI-Detector"); t.setDaemon(true); return t;
     });
@@ -61,13 +61,19 @@ public final class InsightsService implements InsightsAccess, AutoCloseable {
 
     public InsightsService(InsightsRepository store, InsightsTelemetry telemetry,
             ActiveAgentRepository agents, TransactionTypeRepository types) throws Exception {
-        this(store, telemetry, agents, types, new OpenAiProvider(), new AnthropicProvider());
+        this(store, telemetry, agents, types, new OpenAiProvider(), new AnthropicProvider(),
+                new GeminiProvider());
     }
     InsightsService(InsightsRepository store, InsightsTelemetry telemetry,
             ActiveAgentRepository agents, TransactionTypeRepository types,
             AnalysisProvider openai, AnalysisProvider anthropic) throws Exception {
+        this(store, telemetry, agents, types, openai, anthropic, new GeminiProvider());
+    }
+    InsightsService(InsightsRepository store, InsightsTelemetry telemetry,
+            ActiveAgentRepository agents, TransactionTypeRepository types,
+            AnalysisProvider openai, AnalysisProvider anthropic, AnalysisProvider gemini) throws Exception {
         this.store = store; this.telemetry = telemetry; this.agents = agents; this.types = types;
-        this.openai = openai; this.anthropic = anthropic;
+        this.openai = openai; this.anthropic = anthropic; this.gemini = gemini;
         InsightsConfig c = config();
         workers = new ThreadPoolExecutor(c.concurrency, c.concurrency, 0, TimeUnit.SECONDS,
                 new ArrayBlockingQueue<Runnable>(c.queueCapacity), r -> {
@@ -239,7 +245,8 @@ public final class InsightsService implements InsightsAccess, AutoCloseable {
             catch (Exception primary) {
                 if (!c.fallbackEnabled) throw primary;
                 InsightsConfig fallback = mapper.readValue(mapper.writeValueAsString(c), InsightsConfig.class);
-                fallback.provider = c.provider.equals("openai") ? "anthropic" : "openai";
+                fallback.provider = c.provider.equals("openai") ? "anthropic"
+                        : c.provider.equals("anthropic") ? "openai" : "openai";
                 fallback.model = c.fallbackModel;
                 result = attempts(evidence, fallback);
             }
@@ -253,7 +260,7 @@ public final class InsightsService implements InsightsAccess, AutoCloseable {
     private JsonNode attempts(ObjectNode evidence, InsightsConfig c) throws Exception {
         for (int n = 0; ; n++) {
             if (!budget(c)) throw new HttpAnalysisProvider.ProviderException("hourly request budget exhausted", false, 0);
-            try { return (c.provider.equals("openai") ? openai : anthropic).analyze(evidence, c); }
+            try { return provider(c.provider).analyze(evidence, c); }
             catch (Exception e) {
                 boolean retryable = e instanceof java.io.IOException;
                 long delay = (1L << n) * 1000;
@@ -265,6 +272,12 @@ public final class InsightsService implements InsightsAccess, AutoCloseable {
                 Thread.sleep(delay + ThreadLocalRandom.current().nextInt(500));
             }
         }
+    }
+    private AnalysisProvider provider(String id) {
+        if (id.equals("openai")) return openai;
+        if (id.equals("anthropic")) return anthropic;
+        if (id.equals("gemini")) return gemini;
+        throw new IllegalArgumentException("Unsupported provider");
     }
     private boolean budget(InsightsConfig c) throws Exception {
         String hour = Long.toString(System.currentTimeMillis() / 3600000);

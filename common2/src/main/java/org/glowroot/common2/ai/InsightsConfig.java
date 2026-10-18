@@ -67,7 +67,8 @@ public class InsightsConfig {
         positive(gcMillisPerSecond); positive(baselineMultiplier);
         if (baselineMultiplier < 1 || !ratio(errorRate) || !ratio(cpuRatio)
                 || !ratio(heapRatio) || !ratio(throughputDropRatio)
-                || !(provider.equals("openai") || provider.equals("anthropic"))
+                || !(provider.equals("openai") || provider.equals("anthropic")
+                        || provider.equals("gemini"))
                 || model == null || model.length() > 128 || fallbackModel == null
                 || fallbackModel.length() > 128 || excludedFields == null
                 || excludedFields.size() > 30 || (analysisEnabled && model.trim().isEmpty())

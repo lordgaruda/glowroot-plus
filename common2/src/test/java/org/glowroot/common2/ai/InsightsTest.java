@@ -79,6 +79,10 @@ class InsightsTest {
     }
     @Test void validatesConfiguration() {
         config.model = "test-model"; config.analysisEnabled = true; config.validate();
+        config.provider = "gemini"; config.validate();
+        config.provider = "unsupported";
+        assertThatThrownBy(config::validate).isInstanceOf(IllegalArgumentException.class);
+        config.provider = "openai";
         config.timeoutSeconds = 0;
         assertThatThrownBy(config::validate).isInstanceOf(IllegalArgumentException.class);
     }

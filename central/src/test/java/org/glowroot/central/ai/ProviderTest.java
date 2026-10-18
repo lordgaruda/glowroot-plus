@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.glowroot.common.util.ObjectMappers;
+import org.glowroot.common2.ai.AnalysisContract;
 import org.glowroot.common2.ai.InsightsConfig;
 import static org.assertj.core.api.Assertions.*;
 
@@ -73,6 +74,25 @@ class ProviderTest {
         assertThatThrownBy(() -> anthropic.response(anth)).isInstanceOf(IllegalArgumentException.class);
         open.withArray("output").removeAll().addObject().putArray("content").addObject().put("type", "refusal");
         assertThatThrownBy(() -> openai.response(open)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void geminiUsesApiKeyHeaderAndRequiresCompletedJsonCandidate() throws Exception {
+        String json = "{\"summary\":\"Observed\",\"possibleCauses\":[],\"supportingEvidenceIds\":[\"e1\"],"
+                + "\"missingEvidence\":[],\"diagnosticSteps\":[],\"mitigations\":[],"
+                + "\"uncertainty\":\"high\",\"limitations\":\"sampled\"}";
+        com.fasterxml.jackson.databind.ObjectMapper mapper = ObjectMappers.create();
+        com.fasterxml.jackson.databind.node.ObjectNode result = mapper.createObjectNode();
+        result.putArray("candidates").addObject().put("finishReason", "STOP")
+                .putObject("content").putArray("parts").addObject().put("text", json);
+        GeminiProvider gemini = new GeminiProvider("https://example.invalid", "secret");
+        InsightsConfig config = new InsightsConfig(); config.provider = "gemini"; config.model = "gemini-2.5-flash";
+        assertThat(gemini.request(mapper.createObjectNode().put("id", "e1"), config)
+                .path("generationConfig").path("responseMimeType").asText()).isEqualTo("application/json");
+        assertThat(gemini.response(result)).isEqualTo(json);
+        assertThat(AnalysisContract.validate(gemini.response(result), "e1")).isNotNull();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) result.path("candidates").path(0))
+                .put("finishReason", "SAFETY");
+        assertThatThrownBy(() -> gemini.response(result)).isInstanceOf(IllegalArgumentException.class);
     }
 
 }

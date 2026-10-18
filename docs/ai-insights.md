@@ -70,6 +70,8 @@ Set credentials on **every central node**, outside the repository:
 export OPENAI_API_KEY='...'
 # Only needed when selecting Anthropic or explicitly enabling fallback:
 export ANTHROPIC_API_KEY='...'
+# Optional. Gemini Developer API has a free tier on supported models, with quotas:
+export GEMINI_API_KEY='...'
 ```
 
 API keys are not configuration fields, are never returned to the browser, and are never
@@ -77,7 +79,24 @@ included in provider error logs. AI action payloads are omitted from the existin
 logging. Keep credentials in your deployment's secret manager/environment injection.
 
 For local-only operation set `enabled: true`, `analysisEnabled: false`. For AI analysis also
-set `analysisEnabled: true`, `provider: "openai"` or `"anthropic"`, and `model`.
+set `analysisEnabled: true`, `provider: "openai"`, `"anthropic"` or `"gemini"`, and `model`.
+Gemini calls the official Gemini Developer API using `x-goog-api-key`, asks for JSON output,
+and validates the same strict incident-analysis contract used by the other providers. Google
+offers a no-charge Gemini API tier for eligible models/regions, but it is quota-limited and
+requires a Google AI Studio API key; it is not an Antigravity session login. Check Google's
+current [billing and free-tier details](https://ai.google.dev/gemini-api/docs/billing) before
+enabling this provider.
+
+Provider account-login limitations: OpenAI documents Sign in with ChatGPT plan usage for
+open-source/local clients and self-hosted VMs, but a self-hosted VM flow requires completing
+OAuth locally and securely transferring credentials; it is not a central server browser-login
+flow. We therefore do not accept ChatGPT web/Codex session cookies or credentials here. See
+[OpenAI's open-source flow](https://developers.openai.com/siwc/token-sharing-open-source) and
+[self-hosted VM guidance](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms).
+Anthropic's documented Claude subscription integration can trigger a preconfigured Claude Code
+routine, but returns a session reference rather than the model output, so it cannot satisfy this
+incident-analysis contract. We do not scrape Claude/Antigravity sessions or reuse private app
+tokens. Use official API credentials, or Gemini's available free tier.
 The provider connection test is queued, uses synthetic evidence only, consumes the same
 request budget, and exercises response validation. Refresh test status to see the result.
 
@@ -191,7 +210,9 @@ AngularJS text bindings render output; no raw model HTML is inserted.
 
 OpenAI uses `POST https://api.openai.com/v1/responses` with `store:false`, instructions, input,
 and `max_output_tokens`. Anthropic uses `POST https://api.anthropic.com/v1/messages` with
-`anthropic-version: 2023-06-01`, a system message, user evidence and `max_tokens`.
+`anthropic-version: 2023-06-01`, a system message, user evidence and `max_tokens`. Gemini uses
+`POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` with
+`x-goog-api-key`, a separate system instruction, and JSON response mode.
 Official references consulted:
 [OpenAI text generation](https://developers.openai.com/api/docs/guides/text),
 [OpenAI Responses reference](https://developers.openai.com/api/reference/resources/responses/methods/create),
