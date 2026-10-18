@@ -471,6 +471,20 @@
           <groupId>com.github.wvengen</groupId>
           <artifactId>proguard-maven-plugin</artifactId>
           <version>2.7.0</version>
+          <dependencies>
+            <!-- ProGuard 7.7 only reads class files through Java 24. Keep its core in sync:
+              Java 27 JDK modules use class file version 71. -->
+            <dependency>
+              <groupId>com.guardsquare</groupId>
+              <artifactId>proguard-base</artifactId>
+              <version>7.10.0</version>
+            </dependency>
+            <dependency>
+              <groupId>com.guardsquare</groupId>
+              <artifactId>proguard-core</artifactId>
+              <version>9.4.0</version>
+            </dependency>
+          </dependencies>
         </plugin>
         <plugin>
           <groupId>com.github.os72</groupId>
