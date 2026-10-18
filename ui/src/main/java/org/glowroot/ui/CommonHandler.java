@@ -226,6 +226,14 @@ public class CommonHandler {
     private CommonResponse handleRequest(CommonRequest request, Authentication authentication)
             throws Exception {
         String path = request.getPath();
+        // A non-simple header prevents browser cross-origin form POSTs to AI actions.
+        // These endpoints do not enable CORS; cross-origin JS cannot pass preflight.
+        if (request.getMethod().equals("POST") && (path.equals("/backend/ai-insights/action")
+                || path.equals("/backend/admin/ai-insights")
+                || path.equals("/backend/admin/ai-insights/test"))
+                && !"1".equals(request.getHeader("X-Glowroot-AI"))) {
+            return new CommonResponse(FORBIDDEN);
+        }
         HttpService httpService = getHttpService(path);
         if (httpService != null) {
             return handleHttpService(request, httpService, authentication);
@@ -557,7 +565,7 @@ public class CommonHandler {
             } else {
                 String content = request.getContent();
                 auditLogger.info("{} - POST {} - {}", authentication.caseAmbiguousUsername(),
-                        request.getUri(), content);
+                        request.getUri(), request.getPath().contains("ai-insights") ? "[AI action]" : content);
                 if (bindRequest == String.class) {
                     parameters.add(content);
                 } else {
@@ -577,7 +585,7 @@ public class CommonHandler {
             parameters.add(authentication);
         }
         Object service = jsonServiceMapping.service();
-        if (logger.isDebugEnabled()) {
+        if (logger.isDebugEnabled() && !request.getPath().contains("ai-insights")) {
             String params = Joiner.on(", ").join(parameters);
             logger.debug("{}.{}(): {}", service.getClass().getSimpleName(),
                     jsonServiceMapping.method().getName(), params);

@@ -452,6 +452,12 @@ glowroot.config([
       templateUrl: 'views/jvm/capabilities.html',
       controller: 'JvmCapabilitiesCtrl'
     });
+    $stateProvider.state('aiInsights', {
+      url: '/ai-insights?agent-id&agent-rollup-id&transaction-type',
+      templateUrl: 'views/ai-insights.html',
+      controller: 'AiInsightsCtrl',
+      resolve: {waitForAgentRollup: onTransitionWithAgentRollup(true)}
+    });
     $stateProvider.state('nplusOne', {
       url: '/nplus-one?agent-id&agent-rollup-id&transaction-type',
       templateUrl: 'views/nplus-one.html',

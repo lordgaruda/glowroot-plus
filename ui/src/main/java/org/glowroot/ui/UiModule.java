@@ -50,6 +50,7 @@ import org.glowroot.common2.repo.ConfigRepository;
 import org.glowroot.common2.repo.EnvironmentRepository;
 import org.glowroot.common2.repo.GaugeValueRepository;
 import org.glowroot.common2.repo.IncidentRepository;
+import org.glowroot.common2.ai.InsightsAccess;
 import org.glowroot.common2.repo.RepoAdmin;
 import org.glowroot.common2.repo.SyntheticResultRepository;
 import org.glowroot.common2.repo.TraceAttributeNameRepository;
@@ -102,6 +103,7 @@ public class UiModule {
             GaugeValueRepository gaugeValueRepository,
             @Nullable SyntheticResultRepository syntheticResultRepository, // null for embedded
             IncidentRepository incidentRepository,
+            @Nullable InsightsAccess insightsAccess,
             RepoAdmin repoAdmin,
             RollupLevelService rollupLevelService,
             LiveTraceRepository liveTraceRepository,
@@ -170,6 +172,7 @@ public class UiModule {
         jsonServices.add(new InstrumentationConfigJsonService(central, configRepository,
                 liveWeavingService, liveJvmService));
         jsonServices.add(new NplusOneJsonService(traceRepository, clock));
+        jsonServices.add(new AiInsightsJsonService(insightsAccess));
         jsonServices.add(adminJsonService);
 
         if (central) {

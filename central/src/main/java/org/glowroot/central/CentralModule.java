@@ -56,6 +56,9 @@ import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+import org.glowroot.central.ai.InsightsDao;
+import org.glowroot.central.ai.InsightsService;
+import org.glowroot.common2.ai.InsightsTelemetry;
 import org.glowroot.central.util.*;
 import org.glowroot.common2.repo.CassandraProfile;
 import org.immutables.value.Value;
@@ -113,6 +116,7 @@ public class CentralModule {
     private final RollupService rollupService;
     private final SyntheticMonitorService syntheticMonitorService;
     private final UiModule uiModule;
+    private final InsightsService insightsService;
 
     public static CentralModule create() throws Exception {
         return create(getCentralDir());
@@ -142,6 +146,7 @@ public class CentralModule {
         RollupService rollupService = null;
         SyntheticMonitorService syntheticMonitorService = null;
         UiModule uiModule = null;
+        InsightsService insightsService = null;
         try {
             Directories directories = new Directories(centralDir);
             // init logger as early as possible
@@ -240,6 +245,12 @@ public class CentralModule {
                     repos.getIncidentDao(), alertingService, repos.getSyntheticResultDao(),
                     clusterManager, ticker, clock, version);
 
+            insightsService = new InsightsService(
+                    new InsightsDao(session),
+                    new InsightsTelemetry(repos.getAggregateDao(), repos.getTraceDao(),
+                            repos.getGaugeValueDao(), repos.getConfigRepository()),
+                    repos.getActiveAgentDao(), repos.getTransactionTypeDao());
+            insightsService.start();
             ClusterManager clusterManagerEffectivelyFinal = clusterManager;
             uiModule = new CreateUiModuleBuilder()
                     .central(true)
@@ -267,6 +278,7 @@ public class CentralModule {
                     .gaugeValueRepository(repos.getGaugeValueDao())
                     .syntheticResultRepository(repos.getSyntheticResultDao())
                     .incidentRepository(repos.getIncidentDao())
+                    .insightsAccess(insightsService)
                     .repoAdmin(new RepoAdminImpl(session, repos.getActiveAgentDao(),
                             repos.getConfigRepository(), session.getCassandraWriteMetrics(), clock))
                     .rollupLevelService(repos.getRollupLevelService())
@@ -292,6 +304,9 @@ public class CentralModule {
             }
             // try to shut down cleanly, otherwise apache commons daemon (via Procrun) doesn't
             // know service failed to start up
+            if (insightsService != null) {
+                insightsService.close();
+            }
             if (uiModule != null) {
                 uiModule.close(false);
             }
@@ -338,6 +353,7 @@ public class CentralModule {
         this.rollupService = rollupService;
         this.syntheticMonitorService = syntheticMonitorService;
         this.uiModule = uiModule;
+        this.insightsService = insightsService;
     }
 
     CommonHandler getCommonHandler() {
@@ -349,6 +365,7 @@ public class CentralModule {
             startupLogger.info("shutting down...");
         }
         try {
+            insightsService.close();
             ExecutorService executor = Executors.newCachedThreadPool();
             List<CompletableFuture<?>> futures = new ArrayList<>();
             // gracefully close down external inputs first (ui and grpc)

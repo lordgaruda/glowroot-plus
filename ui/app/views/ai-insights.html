@@ -1,0 +1,49 @@
+<div class="container-fluid">
+  <h2>AI Insights</h2>
+  <form class="form-inline" ng-submit="selectAgent()">
+    <label>Leaf agent ID <input class="form-control" ng-model="selectedAgent" required></label>
+    <button class="btn btn-default" type="submit">Select agent</button>
+  </form>
+  <p>Advisory analysis. Severity and lifecycle are determined locally. Evaluation intervals are scheduling targets.</p>
+  <p class="text-danger" ng-bind="error"></p><p ng-bind="notice"></p>
+  <p ng-bind="data.status"></p><p ng-bind="data.coverage"></p>
+  <p ng-repeat="(rule, status) in data.dataStatus">{{rule}}: {{status}}</p>
+  <div class="form-inline">
+    <label>Transaction <input class="form-control" ng-model="filters.transaction"></label>
+    <label>Last hours <input class="form-control" type="number" min="1" max="2160" ng-model="filters.hours"></label>
+    <label>State <select class="form-control" ng-model="filters.state"><option value="">All</option><option>open</option><option>acknowledged</option><option>resolved</option></select></label>
+    <label>Severity <select class="form-control" ng-model="filters.severity"><option value="">All</option><option>warning</option><option>critical</option></select></label>
+  </div>
+  <p ng-if="data.incidents.length === 0">No sustained incidents detected. Cold starts and missing telemetry are insufficient data.</p>
+  <div class="panel panel-default" ng-repeat="i in data.incidents | filter:matches track by i.id">
+    <div class="panel-heading"><strong ng-bind="i.issue"></strong> · {{i.severity}} · {{i.state}} · Analysis: {{i.analysisStatus}}</div>
+    <div class="panel-body">
+      <p>{{i.agentId}} · {{i.transactionType}} · {{i.transactionName || 'All transactions'}}</p>
+      <p>First: {{i.firstSeen | date:'medium'}} · Last: {{i.lastSeen | date:'medium'}} · Occurrences: {{i.occurrences}}</p>
+      <p>Current: {{i.evidence.current | number:3}} · Baseline: {{i.evidence.baseline | number:3}} · Samples: {{i.evidence.samples}} / {{i.evidence.baselineSamples}} · {{i.evidence.dataStatus}}</p>
+      <p>Evidence ID: <code ng-bind="i.evidence.id"></code></p>
+      <p><a ng-href="{{link(i, 'transaction/traces')}}">Traces</a> · <a ng-href="{{link(i, 'transaction/queries')}}">Queries</a> · <a ng-href="{{link(i, 'jvm/gauges')}}">JVM</a> · <a ng-href="{{link(i, 'nplus-one')}}">N+1</a></p>
+      <button class="btn btn-default" ng-if="agentRollup.permissions.config.edit.alerts" ng-click="action(i, 'acknowledge')" ng-disabled="i.state !== 'open'">Acknowledge</button>
+      <button class="btn btn-default" ng-if="agentRollup.permissions.config.edit.alerts" ng-click="action(i, 'reanalyze')" ng-disabled="i.analysisStatus === 'pending'">Request reanalysis</button>
+      <p class="text-warning" ng-bind="i.analysisError"></p>
+      <div ng-if="i.analysis">
+        <p>Analysis evidence: <code ng-bind="i.analyzedEvidence.id"></code> ({{i.analyzedEvidence.to | date:'medium'}})</p>
+        <p ng-bind="i.analysis.summary"></p>
+        <ol><li ng-repeat="cause in i.analysis.possibleCauses">{{cause.hypothesis ? 'Hypothesis: ' : ''}}{{cause.claim}} <span ng-bind="cause.evidenceIds.join(', ')"></span></li></ol>
+        <h4>Recommended checks</h4><ul><li ng-repeat="step in i.analysis.diagnosticSteps track by $index" ng-bind="step"></li></ul>
+        <h4>Suggested mitigations</h4><ul><li ng-repeat="step in i.analysis.mitigations track by $index" ng-bind="step"></li></ul>
+        <h4>Missing evidence</h4><ul><li ng-repeat="step in i.analysis.missingEvidence track by $index" ng-bind="step"></li></ul>
+        <p ng-bind="i.analysis.uncertainty"></p><p ng-bind="i.analysis.limitations"></p>
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-default" ng-if="layout.adminEdit" ng-click="loadConfig()">Administrator configuration</button>
+  <div ng-if="layout.adminEdit &amp;&amp; configText">
+    <p>Credentials: OPENAI_API_KEY / ANTHROPIC_API_KEY on every central node. Keys are never sent to the browser.
+      Model is required when enabling analysis. Cross-provider fallback requires explicit opt-in.</p>
+    <textarea class="form-control" rows="22" aria-label="AI Insights configuration JSON" ng-model="configText"></textarea>
+    <button class="btn btn-primary" ng-click="saveConfig()">Save</button>
+    <button class="btn btn-default" ng-click="test()">Test provider (synthetic evidence)</button>
+    <button class="btn btn-default" ng-click="loadConfig()">Refresh test status</button><span ng-bind="testStatus"></span>
+  </div>
+</div>

@@ -83,6 +83,7 @@ Central needs its own install — see [Agent Installation (for Central Collector
 | JVM thread “Allocated memory” meaning | [docs/jvm-thread-stats-allocated-memory.md](docs/jvm-thread-stats-allocated-memory.md) (wiki paste: [JVM-thread-stats-allocated-memory](https://github.com/glowroot/glowroot/wiki/JVM-thread-stats-allocated-memory)) · [#630](https://github.com/glowroot/glowroot/issues/630) |
 | Contributing (modules / engine map) | [For contributors](https://github.com/glowroot/glowroot/wiki/For-contributors) · [Plugin and Pointcut basics](https://github.com/glowroot/glowroot/wiki/Plugin-and-Pointcut-basics) |
 | Community Q&A | [GitHub Discussions](https://github.com/glowroot/glowroot/discussions) |
+| AI Insights (central detector and advisory analysis) | [Configuration, privacy and verification](docs/ai-insights.md) |
 | AI assistant (`glowroot-ops`) | [skills/glowroot-ops/](skills/glowroot-ops/) |
 
 ## FAQ
